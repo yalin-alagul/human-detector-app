@@ -21,7 +21,12 @@ struct SettingsView: View {
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Button("Restore defaults") {
+                    // Keep the folders the user picked; only reset tuning.
+                    let input = state.config.io.inputPath
+                    let output = state.config.io.outputPath
                     state.config = ConfigStore.defaultConfig(hardware: state.hardware)
+                    state.config.io.inputPath = input
+                    state.config.io.outputPath = output
                     state.refreshModelStatus()
                 }
                 Spacer()
@@ -39,9 +44,12 @@ struct SettingsView: View {
                 get: { state.config.goal ?? .keepHumans },
                 set: { state.config.goal = $0 }
             )) {
-                ForEach(DetectionGoal.allCases) { Text($0.displayName).tag($0) }
+                ForEach(DetectionGoal.allCases) { Text($0.shortName).tag($0) }
             }
-            LabeledContent("Folders", value: state.config.resolvedGoal.folderExplanation)
+            Text(state.config.resolvedGoal.folderExplanation)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

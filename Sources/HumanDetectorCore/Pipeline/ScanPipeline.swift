@@ -53,12 +53,12 @@ public enum PipelineError: Error, LocalizedError {
 /// unit). Manifest and undo writes happen on the actor, in completion order.
 public actor ScanPipeline {
     private let config: AppConfig
-    private let hardware: HardwareProfile
     private let token = CancellationToken()
 
+    /// `hardware` is accepted so callers can construct the pipeline uniformly;
+    /// tuning already happened when the preset was applied to `config`.
     public init(config: AppConfig, hardware: HardwareProfile) {
         self.config = config
-        self.hardware = hardware
     }
 
     public func cancel() {
@@ -150,13 +150,16 @@ public actor ScanPipeline {
 
         let dedup = Deduplicator(enabled: config.behavior.deduplicateByHash)
         let cache = SignalsCache()
+        let sidecar = config.behavior.writeSidecarJSON && !config.behavior.dryRun
+            ? try? SidecarWriter(outputRoot: outputRoot)
+            : nil
         let context = ProcessContext(
             config: config,
             suite: suite,
             dedup: dedup,
             cache: cache,
+            sidecar: sidecar,
             processedHashes: processedHashes,
-            inputRoot: inputRoot,
             outputRoot: outputRoot,
             token: token
         )
@@ -204,6 +207,7 @@ public actor ScanPipeline {
 
         manifest.close()
         undoJournal?.close()
+        await sidecar?.close()
 
         if counts[Verdict.skipped, default: 0] == files.count {
             log.add("All \(files.count) files were already processed (Resume is on). Use Undo Last Run, reset the manifest, or turn off Resume to scan them again.")
@@ -233,8 +237,8 @@ public actor ScanPipeline {
         let suite: DetectorSuite
         let dedup: Deduplicator
         let cache: SignalsCache
+        let sidecar: SidecarWriter?
         let processedHashes: Set<String>
-        let inputRoot: URL
         let outputRoot: URL
         let token: CancellationToken
     }
@@ -318,8 +322,13 @@ public actor ScanPipeline {
                 )
                 destinationPath = outcome.destination.path
 
-                if context.config.behavior.writeSidecarJSON {
-                    try? writeSidecar(entry: decision, relativePath: relativePath, signals: signals, outputRoot: context.outputRoot)
+                if let sidecar = context.sidecar {
+                    await sidecar.append(sidecarRecord(
+                        decision: decision,
+                        relativePath: relativePath,
+                        hash: hash,
+                        signals: signals
+                    ))
                 }
             }
 
@@ -380,17 +389,18 @@ public actor ScanPipeline {
         }
     }
 
-    private nonisolated static func writeSidecar(
-        entry: Decision,
+    private nonisolated static func sidecarRecord(
+        decision: Decision,
         relativePath: String,
-        signals: ImageSignals,
-        outputRoot: URL
-    ) throws {
-        let sidecar: [String: Any] = [
+        hash: String,
+        signals: ImageSignals
+    ) -> [String: Any] {
+        [
             "relative_path": relativePath,
-            "verdict": entry.verdict.rawValue,
-            "stage": entry.stage,
-            "top_score": entry.topScore,
+            "hash": hash,
+            "verdict": decision.verdict.rawValue,
+            "stage": decision.stage,
+            "top_score": decision.topScore,
             "person_top": signals.personTop,
             "face_top": signals.faceTop,
             "human_rect_top": signals.humanRectTop,
@@ -399,17 +409,36 @@ public actor ScanPipeline {
             "face_count": signals.faces.count,
             "tiled": signals.tiled,
         ]
-        let data = try JSONSerialization.data(withJSONObject: sidecar, options: [.prettyPrinted, .sortedKeys])
-        let url = outputRoot
-            .appendingPathComponent(SupportPaths.workDirName, isDirectory: true)
-            .appendingPathComponent("sidecar.jsonl")
+    }
+}
+
+/// Serializes sidecar writes so concurrent workers cannot interleave lines.
+actor SidecarWriter {
+    private let url: URL
+    private var handle: FileHandle?
+
+    init(outputRoot: URL) throws {
+        let dir = outputRoot.appendingPathComponent(SupportPaths.workDirName, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        url = dir.appendingPathComponent("sidecar.jsonl")
         if !FileManager.default.fileExists(atPath: url.path) {
             FileManager.default.createFile(atPath: url.path, contents: nil)
         }
-        let handle = try FileHandle(forWritingTo: url)
-        handle.seekToEndOfFile()
-        try handle.write(contentsOf: data)
-        try handle.write(contentsOf: Data([0x0A]))
-        try handle.close()
+        let fileHandle = try FileHandle(forWritingTo: url)
+        fileHandle.seekToEndOfFile()
+        handle = fileHandle
+    }
+
+    func append(_ record: [String: Any]) {
+        guard let handle,
+              let data = try? JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
+        else { return }
+        try? handle.write(contentsOf: data)
+        try? handle.write(contentsOf: Data([0x0A]))
+    }
+
+    func close() {
+        try? handle?.close()
+        handle = nil
     }
 }

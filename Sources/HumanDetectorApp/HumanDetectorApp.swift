@@ -9,9 +9,10 @@ struct HumanDetectorApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(state)
-                .frame(minWidth: 1040, minHeight: 700)
+                .frame(minWidth: 900, minHeight: 620)
                 .onAppear { state.bootstrap() }
         }
+        .defaultSize(width: 1180, height: 800)
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
@@ -30,7 +31,7 @@ struct HumanDetectorApp: App {
         Settings {
             SettingsView()
                 .environmentObject(state)
-                .frame(width: 720, height: 640)
+                .frame(minWidth: 700, idealWidth: 780, minHeight: 560, idealHeight: 680)
         }
     }
 }
@@ -55,7 +56,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .dashboard: return "gauge.with.dots.needle.bottom.50percent"
         case .run: return "play.circle"
         case .review: return "square.grid.2x2"
-        case .calibrate: return "slider.horizontal.below.square.filled.and.square"
+        case .calibrate: return "slider.horizontal.3"
         case .settings: return "gearshape"
         case .models: return "shippingbox"
         }
@@ -88,10 +89,27 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         } detail: {
-            detail
-                .navigationTitle(selection.title)
-                .toolbar { toolbar }
+            VStack(spacing: 0) {
+                if !state.statusMessage.isEmpty {
+                    StatusBanner(message: state.statusMessage, isWarning: statusIsWarning) {
+                        state.statusMessage = ""
+                    }
+                }
+                detail
+                    .navigationTitle(selection.title)
+                    .toolbar { toolbar }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+    }
+
+    private var statusIsWarning: Bool {
+        let lower = state.statusMessage.lowercased()
+        return lower.contains("can’t") || lower.contains("can't")
+            || lower.contains("error") || lower.contains("nothing")
+            || lower.contains("no images") || lower.contains("already processed")
+            || lower.contains("not loaded") || lower.contains("missing")
+            || lower.contains("failed")
     }
 
     @ViewBuilder
@@ -108,14 +126,6 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .status) {
-            if !state.statusMessage.isEmpty {
-                Text(state.statusMessage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
         ToolbarItem(placement: .primaryAction) {
             if state.isRunning {
                 Button(role: .destructive) { state.cancelRun() } label: {

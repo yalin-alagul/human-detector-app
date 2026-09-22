@@ -29,7 +29,7 @@ public enum DecisionEngine {
     public static func decide(
         signals: ImageSignals,
         thresholds: ThresholdConfig,
-        goal: DetectionGoal = .removeHumans
+        goal: DetectionGoal
     ) -> Decision {
         apply(goal: goal, to: presenceDecision(signals: signals, thresholds: thresholds))
     }

@@ -5,7 +5,7 @@ struct RunView: View {
     @EnvironmentObject private var state: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: Theme.gap) {
             LogoHeader()
             Divider()
 
@@ -17,10 +17,13 @@ struct RunView: View {
                     systemImage: "play.circle",
                     description: Text("Pick folders on the Dashboard, then start a scan.")
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
             if !state.recent.isEmpty {
-                Text("Recent images").font(.headline).padding(.horizontal, 20)
+                Text("Recent images")
+                    .font(.headline)
+                    .padding(.horizontal, 20)
                 recentStrip
             }
             Spacer(minLength: 0)
@@ -29,60 +32,67 @@ struct RunView: View {
     }
 
     private var progressSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let progress = state.progress {
-                ProgressView(value: Double(progress.processed), total: Double(max(1, progress.total)))
-                    .progressViewStyle(.linear)
+        Card("Scan progress", systemImage: "speedometer") {
+            VStack(alignment: .leading, spacing: Theme.gap) {
+                if let progress = state.progress {
+                    ProgressView(value: Double(progress.processed), total: Double(max(1, progress.total)))
+                        .progressViewStyle(.linear)
 
-                HStack(spacing: 10) {
-                    MetricTile(title: "Processed", value: "\(progress.processed)/\(progress.total)")
-                    MetricTile(title: "Speed", value: String(format: "%.1f img/s", progress.imagesPerSecond), tint: .blue)
-                    MetricTile(title: "ETA", value: progress.etaSeconds.map { format($0) } ?? "—", tint: .indigo)
-                }
-                HStack(spacing: 10) {
-                    MetricTile(title: "Clean", value: "\(progress.counts[.clean, default: 0])", tint: .green)
-                    MetricTile(title: "Review", value: "\(progress.counts[.review, default: 0])", tint: .orange)
-                    MetricTile(title: "Trash", value: "\(progress.counts[.trash, default: 0])", tint: .red)
-                }
+                    StatGrid(items: [
+                        .init(title: "Processed", value: "\(progress.processed)/\(progress.total)"),
+                        .init(title: "Speed", value: String(format: "%.1f img/s", progress.imagesPerSecond), tint: .blue),
+                        .init(title: "ETA", value: progress.etaSeconds.map { format($0) } ?? "—", tint: .indigo),
+                        .init(title: "Clean", value: "\(progress.counts[.clean, default: 0])", tint: .green),
+                        .init(title: "Review", value: "\(progress.counts[.review, default: 0])", tint: .orange),
+                        .init(title: "Trash", value: "\(progress.counts[.trash, default: 0])", tint: .red),
+                    ])
 
-                Text(progress.currentPath)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            } else {
-                ProgressView().progressViewStyle(.linear)
+                    Text(progress.currentPath)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(progress.currentPath)
+                } else {
+                    ProgressView().progressViewStyle(.linear)
+                }
             }
         }
         .padding(.horizontal, 20)
     }
 
+    private var thumbSize: CGFloat {
+        CGFloat(max(80, min(220, state.config.ui.thumbnailSize)))
+    }
+
     private var recentStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(state.recent.reversed(), id: \.hash) { entry in
+            HStack(spacing: Theme.rowGap) {
+                ForEach(state.recent.reversed(), id: \.stableID) { entry in
                     VStack(spacing: 6) {
-                        ThumbnailImage(url: thumbnailURL(for: entry), size: 120)
+                        ThumbnailImage(url: thumbnailURL(for: entry), size: thumbSize)
                             .overlay(alignment: .topTrailing) {
                                 Image(systemName: entry.verdict.symbol)
                                     .font(.caption)
                                     .padding(4)
                                     .background(.thinMaterial, in: Circle())
                                     .foregroundStyle(entry.verdict.color)
-                                    .padding(4)
+                                    .padding(6)
                             }
                         Text(entry.fileName)
                             .font(.caption2)
                             .lineLimit(1)
-                            .frame(width: 120)
+                            .truncationMode(.middle)
+                            .frame(width: thumbSize)
                         Text(String(format: "%.2f", entry.topScore))
-                            .font(.caption2.monospacedDigit())
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
             .padding(.horizontal, 20)
         }
+        .frame(height: thumbSize + 48)
     }
 
     private func thumbnailURL(for entry: ManifestEntry) -> URL? {

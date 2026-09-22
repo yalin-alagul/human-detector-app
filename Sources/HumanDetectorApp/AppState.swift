@@ -235,12 +235,18 @@ final class AppState: ObservableObject {
 
     // MARK: - Review
 
-    func reclassify(_ entry: ManifestEntry, to verdict: Verdict) {
-        guard let destination = entry.destinationPath else { return }
-        let source = URL(fileURLWithPath: destination)
+    /// Move a review item to another verdict folder, record it in the manifest
+    /// so resume agrees, and journal it so Undo can put it back.
+    @discardableResult
+    func reclassify(_ entry: ManifestEntry, to verdict: Verdict) -> Bool {
+        guard let currentDestination = entry.destinationPath else {
+            statusMessage = "This file has no recorded location; re-run a scan first."
+            return false
+        }
+        let source = URL(fileURLWithPath: currentDestination)
         let root = outputURL ?? URL(fileURLWithPath: config.io.outputPath)
         do {
-            _ = try Mover.place(
+            let outcome = try Mover.place(
                 source: source,
                 outputRoot: root,
                 verdict: verdict,
@@ -250,10 +256,64 @@ final class AppState: ObservableObject {
                 hash: entry.hash,
                 dryRun: false
             )
-            statusMessage = "Moved \(entry.fileName) to \(verdict.rawValue)."
+
+            // Journal the move so Undo Last Run restores it.
+            let journal = try UndoJournal(outputRoot: root)
+            journal.record(UndoRecord(
+                sourcePath: entry.sourcePath,
+                destinationPath: outcome.destination.path,
+                hash: entry.hash,
+                verdict: verdict
+            ))
+            journal.close()
+
+            // Record the new verdict so processedHashes reflects reality.
+            if let writer = try? ManifestWriter(outputRoot: root, writeCSV: false, writeJSONL: true) {
+                writer.append(ManifestEntry(
+                    relativePath: entry.relativePath,
+                    fileName: entry.fileName,
+                    hash: entry.hash,
+                    width: entry.width,
+                    height: entry.height,
+                    verdict: verdict,
+                    stage: "manual",
+                    topScore: entry.topScore,
+                    personScore: entry.personScore,
+                    faceScore: entry.faceScore,
+                    sourcePath: entry.sourcePath,
+                    destinationPath: outcome.destination.path
+                ))
+                writer.close()
+            }
+
+            statusMessage = "Moved \(entry.fileName) to \(verdict.rawValue). Undo Last Run will put it back."
+            return true
         } catch {
             statusMessage = error.localizedDescription
+            return false
         }
+    }
+
+    /// Load an image plus its detections for the review preview.
+    func previewPayload(for url: URL) async -> PreviewPayload? {
+        let config = self.config
+        return await Task.detached(priority: .userInitiated) { () -> PreviewPayload? in
+            guard let loaded = try? ImageLoader.load(at: url, maxPixelSize: 1600) else { return nil }
+            var detections: [Detection] = []
+            if let suite = try? DetectorSuite(config: config),
+               let signals = try? suite.analyze(image: loaded.cgImage, thresholds: config.thresholds) {
+                detections = signals.personDetections + signals.faces
+            }
+            return PreviewPayload(image: loaded.cgImage, detections: detections)
+        }.value
+    }
+
+    /// Read the manifest off the main thread.
+    func loadManifestEntries() async -> [ManifestEntry] {
+        let root = outputURL ?? URL(fileURLWithPath: config.io.outputPath)
+        return await Task.detached(priority: .userInitiated) {
+            ManifestReader.allEntries(outputRoot: root)
+        }.value
     }
 
     func revealInFinder(_ entry: ManifestEntry) {
@@ -286,6 +346,12 @@ final class AppState: ObservableObject {
         PresetResolver.apply(preset, hardware: hardware, to: &config)
         refreshModelStatus()
     }
+}
+
+/// Decoded image plus the detections found on it, for the review preview.
+struct PreviewPayload: @unchecked Sendable {
+    let image: CGImage
+    let detections: [Detection]
 }
 
 /// NSOpenPanel wrapper for choosing a folder inside the sandbox.

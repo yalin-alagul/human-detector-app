@@ -45,25 +45,40 @@ public enum Mover {
 
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
 
+        // Overwrite is handled with a backup so a failed move cannot lose data.
+        var backup: URL?
         if FileManager.default.fileExists(atPath: destination.path) {
-            let resolved = try resolveCollision(
+            if collision == .overwrite {
+                let tmp = parent.appendingPathComponent(".hd-backup-\(UUID().uuidString)")
+                try FileManager.default.moveItem(at: destination, to: tmp)
+                backup = tmp
+            } else if let resolved = try resolveCollision(
                 destination: destination,
                 policy: collision,
                 hash: hash
-            )
-            switch resolved {
-            case .none:
+            ) {
+                destination = resolved
+            } else {
                 return MoveOutcome(destination: destination, performed: false)
-            case .some(let url):
-                destination = url
             }
         }
 
-        switch mode {
-        case .move:
-            try FileManager.default.moveItem(at: source, to: destination)
-        case .copy:
-            try FileManager.default.copyItem(at: source, to: destination)
+        do {
+            switch mode {
+            case .move:
+                try FileManager.default.moveItem(at: source, to: destination)
+            case .copy:
+                try FileManager.default.copyItem(at: source, to: destination)
+            }
+        } catch {
+            // Put the original back if we displaced it.
+            if let backup {
+                try? FileManager.default.moveItem(at: backup, to: destination)
+            }
+            throw error
+        }
+        if let backup {
+            try? FileManager.default.removeItem(at: backup)
         }
         return MoveOutcome(destination: destination, performed: true)
     }
@@ -74,11 +89,8 @@ public enum Mover {
         hash: String
     ) throws -> URL? {
         switch policy {
-        case .skip:
+        case .skip, .overwrite:
             return nil
-        case .overwrite:
-            try FileManager.default.removeItem(at: destination)
-            return destination
         case .hashSuffix:
             let ext = destination.pathExtension
             let stem = destination.deletingPathExtension().lastPathComponent

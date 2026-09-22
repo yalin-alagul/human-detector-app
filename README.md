@@ -96,6 +96,7 @@ make xctest   # the same tests through Xcode (⌘U equivalent)
 make app      # build the macOS app
 make run      # build, refresh build/Human Detector.app, and open it
 make models   # export the CoreML models
+make icon     # regenerate the app icon / logo assets
 ```
 
 ---
@@ -248,8 +249,9 @@ it:
 2. Raw scores are cached, so moving a threshold slider re-classifies the sample
    **instantly with no extra inference**.
 3. Tune until nothing human appears in `clean/`, then **Apply thresholds**.
-4. **Review** shows the `review/` and `trash/` grids with one-click reclassify
-   and Reveal in Finder.
+4. **Review** shows the `review/` and `trash/` grids. Click any tile for a large
+   preview with detection boxes; right-click to reclassify, which rewrites the
+   manifest and stays undoable.
 5. Spot-check a random batch of `clean/` before deleting anything.
 
 ---

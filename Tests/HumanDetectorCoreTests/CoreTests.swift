@@ -1,12 +1,40 @@
 import XCTest
+import AppKit
 @testable import HumanDetectorCore
+
+/// Guards against shipping a blank icon because an SF Symbol name was wrong.
+final class SymbolTests: XCTestCase {
+    private let symbols = [
+        // verdicts
+        "checkmark.seal.fill", "questionmark.circle.fill", "xmark.octagon.fill",
+        "arrow.uturn.forward.circle", "exclamationmark.triangle.fill",
+        // generic
+        "photo", "photo.badge.exclamationmark", "info.circle.fill", "xmark.circle.fill",
+        "checkmark.circle.fill", "circle.dashed",
+        // app chrome
+        "person.crop.rectangle.stack", "folder", "tray.and.arrow.down", "cpu",
+        "clock.arrow.circlepath", "arrow.uturn.backward", "arrow.clockwise",
+        "square.grid.2x2", "play.circle", "stop.circle", "speedometer",
+        "arrow.up.left.and.arrow.down.right", "wand.and.stars", "slider.horizontal.3",
+        "chart.bar", "gauge.with.dots.needle.bottom.50percent", "gearshape", "shippingbox",
+    ]
+
+    func testAllSymbolsResolve() {
+        for name in symbols {
+            XCTAssertNotNil(
+                NSImage(systemSymbolName: name, accessibilityDescription: nil),
+                "SF Symbol '\(name)' does not exist on this OS"
+            )
+        }
+    }
+}
 
 final class DecisionEngineTests: XCTestCase {
     func testTrashOnStrongPerson() {
         let signals = ImageSignals(personDetections: [
             Detection(label: "person", confidence: 0.9, box: BoundingBox(x: 0.1, y: 0.1, width: 0.4, height: 0.6)),
         ])
-        let decision = DecisionEngine.decide(signals: signals, thresholds: ThresholdConfig())
+        let decision = DecisionEngine.decide(signals: signals, thresholds: ThresholdConfig(), goal: .removeHumans)
         XCTAssertEqual(decision.verdict, .trash)
         XCTAssertEqual(decision.stage, "yolo-person")
     }
@@ -15,12 +43,12 @@ final class DecisionEngineTests: XCTestCase {
         let signals = ImageSignals(personDetections: [
             Detection(label: "person", confidence: 0.15, box: BoundingBox(x: 0.1, y: 0.1, width: 0.4, height: 0.6)),
         ])
-        let decision = DecisionEngine.decide(signals: signals, thresholds: ThresholdConfig())
+        let decision = DecisionEngine.decide(signals: signals, thresholds: ThresholdConfig(), goal: .removeHumans)
         XCTAssertEqual(decision.verdict, .review)
     }
 
     func testCleanWhenEmpty() {
-        let decision = DecisionEngine.decide(signals: .empty, thresholds: ThresholdConfig())
+        let decision = DecisionEngine.decide(signals: .empty, thresholds: ThresholdConfig(), goal: .removeHumans)
         XCTAssertEqual(decision.verdict, .clean)
     }
 
@@ -28,7 +56,7 @@ final class DecisionEngineTests: XCTestCase {
         let signals = ImageSignals(faces: [
             Detection(label: "face", confidence: 0.8, box: BoundingBox(x: 0.1, y: 0.1, width: 0.2, height: 0.2)),
         ])
-        let decision = DecisionEngine.decide(signals: signals, thresholds: ThresholdConfig())
+        let decision = DecisionEngine.decide(signals: signals, thresholds: ThresholdConfig(), goal: .removeHumans)
         XCTAssertEqual(decision.verdict, .trash)
         XCTAssertEqual(decision.stage, "face")
     }
@@ -65,7 +93,7 @@ final class DecisionEngineTests: XCTestCase {
         let signals = ImageSignals(personDetections: [
             Detection(label: "person", confidence: 0.99, box: BoundingBox(x: 0.5, y: 0.5, width: 0.001, height: 0.001)),
         ])
-        let decision = DecisionEngine.decide(signals: signals, thresholds: ThresholdConfig())
+        let decision = DecisionEngine.decide(signals: signals, thresholds: ThresholdConfig(), goal: .removeHumans)
         XCTAssertEqual(decision.verdict, .clean)
     }
 }
@@ -232,6 +260,35 @@ final class UndoResumeTests: XCTestCase {
 
         try ManifestReader.reset(outputRoot: root)
         XCTAssertTrue(ManifestReader.processedHashes(outputRoot: root).isEmpty)
+    }
+}
+
+final class SidecarWriterTests: XCTestCase {
+    func testConcurrentAppendsDoNotInterleave() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let writer = try SidecarWriter(outputRoot: root)
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<200 {
+                group.addTask { await writer.append(["i": index, "name": "row-\(index)"]) }
+            }
+        }
+        await writer.close()
+
+        let url = root
+            .appendingPathComponent(".humandetector", isDirectory: true)
+            .appendingPathComponent("sidecar.jsonl")
+        let data = try Data(contentsOf: url)
+        let lines = data.split(separator: 0x0A)
+        XCTAssertEqual(lines.count, 200)
+        for line in lines {
+            XCTAssertNotNil(
+                try? JSONSerialization.jsonObject(with: Data(line)),
+                "each line must be complete, valid JSON"
+            )
+        }
     }
 }
 

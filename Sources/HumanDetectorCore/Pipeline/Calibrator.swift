@@ -6,6 +6,15 @@ public struct CalibrationItem: Sendable {
     public var url: URL
     public var relativePath: String
     public var signals: ImageSignals
+    /// Set when the image could not be decoded or analyzed.
+    public var error: String?
+
+    public init(url: URL, relativePath: String, signals: ImageSignals, error: String? = nil) {
+        self.url = url
+        self.relativePath = relativePath
+        self.signals = signals
+        self.error = error
+    }
 }
 
 /// Runs the detector suite over a random sample and hands back the raw signals.
@@ -44,14 +53,21 @@ public enum Calibrator {
 
         for (index, file) in files.enumerated() {
             if Task.isCancelled { break }
-            let signals: ImageSignals
+            var signals = ImageSignals.empty
+            var failure: String?
             do {
                 let loaded = try ImageLoader.load(at: file.url, maxPixelSize: decodeCap)
                 signals = try suite.analyze(image: loaded.cgImage, thresholds: config.thresholds)
             } catch {
-                signals = .empty
+                // Do not silently treat an unreadable file as "clean".
+                failure = error.localizedDescription
             }
-            items.append(CalibrationItem(url: file.url, relativePath: file.relativePath, signals: signals))
+            items.append(CalibrationItem(
+                url: file.url,
+                relativePath: file.relativePath,
+                signals: signals,
+                error: failure
+            ))
             onProgress?(index + 1, files.count)
         }
         return items

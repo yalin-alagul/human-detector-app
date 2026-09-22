@@ -95,6 +95,17 @@ public enum HardwarePreset: String, Codable, Sendable, CaseIterable, Identifiabl
         case .custom: return "Custom"
         }
     }
+
+    /// Fits in a segmented control without clipping.
+    public var shortName: String {
+        switch self {
+        case .auto: return "Auto"
+        case .lite: return "Lite"
+        case .balanced: return "Balanced"
+        case .max: return "Max"
+        case .custom: return "Custom"
+        }
+    }
 }
 
 public enum FaceProvider: String, Codable, Sendable, CaseIterable, Identifiable {

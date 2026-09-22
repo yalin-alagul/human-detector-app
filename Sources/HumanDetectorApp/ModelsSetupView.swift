@@ -92,20 +92,28 @@ struct ModelsSetupView: View {
             Text("Run this from the repository root. It downloads the Ultralytics weights, exports them to CoreML, and drops them into `Resources/Models/`.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            Text("""
-            python3 -m venv .venv && source .venv/bin/activate
-            pip install ultralytics coremltools onnx onnxruntime
-            python Models/export_models.py --family yolo26 --sizes n s m x --task seg
-            """)
-            .font(.caption.monospaced())
-            .padding(10)
-            .background(.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-            .textSelection(.enabled)
+            ScrollView(.horizontal, showsIndicators: true) {
+                Text("""
+                python3 -m venv .venv && source .venv/bin/activate
+                pip install ultralytics coremltools onnx onnxruntime onnx2torch torch
+                python Models/export_models.py --family yolo26 --sizes n s m x --task seg
+                python Models/export_models.py --scrfd
+                """)
+                .font(.caption.monospaced())
+                .fixedSize(horizontal: true, vertical: false)
+                .textSelection(.enabled)
+                .padding(10)
+            }
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
 
-            Text("Bundled filenames the app resolves").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            Text(expectedPersonModels.joined(separator: "  ·  "))
-                .font(.caption2.monospaced())
+            Text("Bundled filenames the app resolves")
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
+            ForEach(expectedPersonModels, id: \.self) { stem in
+                Text(stem)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+            }
             Text("Optional face specialist: scrfd_10g_bnkps.mlpackage")
                 .font(.caption2.monospaced())
                 .foregroundStyle(.secondary)
