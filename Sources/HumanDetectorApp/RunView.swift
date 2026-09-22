@@ -6,6 +6,9 @@ struct RunView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            LogoHeader()
+            Divider()
+
             if state.isRunning || state.progress != nil {
                 progressSection
             } else {
@@ -22,7 +25,7 @@ struct RunView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.top, 20)
+        .padding(.top, 4)
     }
 
     private var progressSection: some View {

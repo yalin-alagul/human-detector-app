@@ -1,6 +1,32 @@
 import SwiftUI
 import HumanDetectorCore
 
+// MARK: - Brand header
+
+/// The one place the logo is drawn. Used by the sidebar and by the Scan view so
+/// the mark is identical in size and spacing everywhere.
+struct LogoHeader: View {
+    var showsTitle: Bool = true
+    var logoSize: CGFloat = 24
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image("Logo")
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: logoSize, height: logoSize)
+            if showsTitle {
+                Text("Human Detector")
+                    .font(.headline)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+}
+
 // MARK: - Verdict styling
 
 extension Verdict {

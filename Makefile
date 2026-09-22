@@ -13,7 +13,7 @@ APP_NAME := Human Detector.app
 APP := $(DERIVED)/Build/Products/Debug/$(APP_NAME)
 STAGED := build/$(APP_NAME)
 
-.PHONY: test xctest app run models cli hooks ci clean
+.PHONY: test xctest app run models icon cli hooks ci clean
 
 test:
 	swift test
@@ -40,6 +40,9 @@ cli:
 
 models:
 	.venv/bin/python Models/export_models.py --family yolo26 --sizes n s m x --task seg
+
+icon:
+	.venv/bin/python Scripts/generate_app_icon.py
 
 # Make every push in this clone run the tests first.
 hooks:

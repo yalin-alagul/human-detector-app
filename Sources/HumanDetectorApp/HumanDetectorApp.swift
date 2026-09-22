@@ -72,6 +72,7 @@ struct ContentView: View {
                 Label(item.title, systemImage: item.symbol).tag(item)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+            .safeAreaInset(edge: .top) { LogoHeader() }
             .safeAreaInset(edge: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(state.hardware.summary)
