@@ -1,0 +1,25 @@
+# build artifacts
+.build/
+.swiftpm/
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+HumanDetector.xcodeproj
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# model cache and exported models (large; see Models/export_models.py)
+.model-cache/
+Resources/Models/*
+!Resources/Models/.gitkeep
+*.pt
+*.mlpackage/
+*.mlmodelc/
+.venv-scrfd/
+
+# macOS
+.DS_Store

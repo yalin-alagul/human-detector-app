@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# Pre-push gate: a push will not go through unless the tests pass.
+# Enable once per clone with:  make hooks
+#
+set -euo pipefail
+
+echo "▶ pre-push: swift test"
+swift test
+
+if command -v xcodegen >/dev/null 2>&1; then
+  echo "▶ pre-push: xcodegen generate"
+  xcodegen generate >/dev/null
+  echo "▶ pre-push: xcodebuild build"
+  xcodebuild \
+    -project HumanDetector.xcodeproj \
+    -scheme HumanDetector \
+    -configuration Debug \
+    -destination 'platform=macOS' \
+    -derivedDataPath build/DerivedData \
+    CODE_SIGNING_ALLOWED=NO \
+    build >/dev/null
+else
+  echo "⚠ xcodegen not found — skipping app build (brew install xcodegen)"
+fi
+
+echo "✔ pre-push checks passed"
