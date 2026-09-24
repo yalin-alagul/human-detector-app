@@ -7,23 +7,42 @@
 #   make models   export the CoreML models (needs the Python venv)
 #   make hooks    install the pre-push test gate in this clone
 #   make ci       run exactly what CI runs
+#   make clean    delete build outputs (.build, build)
+#   make uninstall remove the app and its data from this Mac (asks first)
 
 DERIVED := build/DerivedData
 APP_NAME := Human Detector.app
 APP := $(DERIVED)/Build/Products/Debug/$(APP_NAME)
 STAGED := build/$(APP_NAME)
+PROJECT := HumanDetector.xcodeproj/project.pbxproj
 
-.PHONY: test xctest app run models icon cli hooks ci clean
+# A fresh Mac points xcode-select at the Command Line Tools, which have no
+# XCTest and no xcodebuild. Use the installed Xcode instead; an explicit
+# DEVELOPER_DIR in the environment still wins.
+XCODE_DEVELOPER := /Applications/Xcode.app/Contents/Developer
+ifneq ($(findstring CommandLineTools,$(shell xcode-select -p 2>/dev/null)),)
+ifneq ($(wildcard $(XCODE_DEVELOPER)),)
+export DEVELOPER_DIR ?= $(XCODE_DEVELOPER)
+endif
+endif
+
+.PHONY: test xctest app run models icon cli hooks ci clean uninstall
 
 test:
 	swift test
 
-xctest:
+# The Xcode project is generated from project.yml and not checked in.
+$(PROJECT): project.yml
+	@command -v xcodegen >/dev/null 2>&1 || { echo "xcodegen not found — run: brew install xcodegen"; exit 1; }
+	xcodegen generate
+	@touch $@
+
+xctest: $(PROJECT)
 	xcodebuild -project HumanDetector.xcodeproj -scheme HumanDetector \
 		-configuration Debug -destination 'platform=macOS' \
 		-derivedDataPath $(DERIVED) CODE_SIGNING_ALLOWED=NO test
 
-app:
+app: $(PROJECT)
 	xcodebuild -project HumanDetector.xcodeproj -scheme HumanDetector \
 		-configuration Debug -destination 'platform=macOS' \
 		-derivedDataPath $(DERIVED) CODE_SIGNING_ALLOWED=NO build
@@ -55,3 +74,6 @@ ci: test app
 
 clean:
 	rm -rf .build build
+
+uninstall:
+	Scripts/uninstall.sh

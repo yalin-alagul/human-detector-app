@@ -66,9 +66,15 @@ Models land in `Resources/Models/` and are compiled into the app bundle by Xcode
 
 ### 2. Build the app
 
+Needs the full Xcode app, not just the Command Line Tools. A new Mac points
+`xcode-select` at the Command Line Tools, which have no XCTest or `xcodebuild`;
+the Makefile and pre-push hook switch to `/Applications/Xcode.app` on their own.
+To fix it for plain `swift test` / `xcodebuild` too, run once:
+`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
+
 ```bash
 brew install xcodegen        # once
-xcodegen generate
+xcodegen generate            # `make app` does this when project.yml changes
 open HumanDetector.xcodeproj
 ```
 
@@ -97,7 +103,14 @@ make app      # build the macOS app
 make run      # build, refresh build/Human Detector.app, and open it
 make models   # export the CoreML models
 make icon     # regenerate the app icon / logo assets
+make clean    # delete build outputs (.build, build)
+make uninstall  # remove the app and its data from this Mac (lists and asks first)
 ```
+
+`make uninstall` removes the app, its settings and its compiled models from
+`~/Library`, plus the build outputs. It never touches your photos or output
+folders; delete the project folder yourself to remove the source and models.
+`Scripts/uninstall.sh --dry-run` only lists what it would remove.
 
 ---
 
@@ -183,7 +196,7 @@ The app detects RAM and cores and recommends a preset. You can override it.
 |---|---|---|---|---|
 | Lite | `…n-seg` | 640 | 2 | 8 GB machines |
 | Balanced | `…m-seg` | 960 | 4 | 16 GB (this dev Mac: M1, 16 GB) |
-| Max | `…x-seg` | 1280 | 6 | 24 GB+ (e.g. a future M6 Mac mini) |
+| Max | `…x-seg` | 1280 | 6 | 24 GB+ (verified on an M6 Mac mini, 24 GB) |
 | Custom | your choice | your choice | your choice | — |
 
 **The “best model” default is `yolo26x-seg` at 1280 px on a 24 GB machine.**
@@ -213,7 +226,9 @@ overnight batches.
 Numbers are end-to-end (decode + inference + move + manifest). The ANE
 serializes inference, so concurrency overlaps decoding rather than predictions.
 A 24 GB machine with a newer chip should run the `x` model several times
-faster; measure with `humandetector scan` before a big batch.
+faster; measure with `humandetector scan` before a big batch. The first `x`
+load on a new Mac takes ~45 s while CoreML compiles it for the Neural Engine;
+later launches reuse the compiled copy.
 
 ---
 

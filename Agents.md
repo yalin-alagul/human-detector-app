@@ -164,9 +164,13 @@ corrections. See `README.md` for the full guide.
 - **Faces** default to Vision's built-in detector; SCRFD is available as an
   optional CoreML export.
 - **Hardware is detected, not assumed.** There is no "M6"; presets key on RAM
-  and cores (`lite` 8 GB, `balanced` 16 GB, `max` 24 GB+). This dev machine
-  auto-selects `balanced` (`yolo26m-seg` @ 960 px); a 24 GB machine selects
-  `max` (`yolo26x-seg` @ 1280 px).
+  and cores (`lite` 8 GB, `balanced` 16 GB, `max` 24 GB+). The 16 GB M1 dev
+  MacBook Pro auto-selects `balanced` (`yolo26m-seg` @ 960 px); the M6 Mac mini
+  (24 GB) selects `max` (`yolo26x-seg` @ 1280 px) and is verified on it. Core
+  counts read every perflevel, so the M6's three tiers show as `2S+4P+6E`.
+- **Builds need full Xcode.** The Makefile and pre-push hook set
+  `DEVELOPER_DIR` to `/Applications/Xcode.app` when `xcode-select` points at
+  the Command Line Tools (no XCTest, no `xcodebuild`).
 - **Masks are optional.** Presence needs only boxes; `computeMasks` defaults
   off and is enabled for the review UI.
 - **Undo exists.** Every move is journalled; `Undo Last Run` restores it.

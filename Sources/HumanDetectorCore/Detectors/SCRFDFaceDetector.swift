@@ -8,7 +8,7 @@ import CoreGraphics
 /// detector handles most libraries without any extra model. This path expects a
 /// CoreML package whose outputs are named `score_<stride>`, `bbox_<stride>`,
 /// `kps_<stride>` for strides 8/16/32 — `Models/export_models.py` produces
-/// exactly that naming.
+/// exactly that naming. Unnamed outputs are matched by shape instead.
 public final class SCRFDFaceDetector: FaceDetecting, @unchecked Sendable {
     private let model: MLModel
     private let inputName: String
@@ -62,6 +62,27 @@ public final class SCRFDFaceDetector: FaceDetecting, @unchecked Sendable {
             default: break
             }
         }
+
+        // Exports that kept the converter's numeric names (var_717, …): the
+        // shape [N, 1|4|10] gives the head kind, and N anchors (two per grid
+        // cell) give the stride.
+        if byStride.isEmpty {
+            for (key, description) in model.modelDescription.outputDescriptionsByName {
+                guard let shape = description.multiArrayConstraint?.shape.map(\.intValue),
+                      shape.count >= 2, let channels = shape.last else { continue }
+                let anchors = shape.dropLast().reduce(1, *)
+                guard anchors > 0 else { continue }
+                let stride = Int((Double(2 * inputWidth * inputHeight) / Double(anchors)).squareRoot().rounded())
+                guard stride > 0, (inputWidth / stride) * (inputHeight / stride) * 2 == anchors else { continue }
+                switch channels {
+                case 1: byStride[stride, default: (nil, nil, nil)].score = key
+                case 4: byStride[stride, default: (nil, nil, nil)].bbox = key
+                case 10: byStride[stride, default: (nil, nil, nil)].kps = key
+                default: break
+                }
+            }
+        }
+
         let built: [Head] = byStride.compactMap { stride, names in
             guard let score = names.score, let bbox = names.bbox else { return nil }
             return Head(stride: stride, scoreName: score, bboxName: bbox, kpsName: names.kps)
@@ -69,7 +90,7 @@ public final class SCRFDFaceDetector: FaceDetecting, @unchecked Sendable {
 
         guard !built.isEmpty else {
             throw DetectorError.unsupportedOutput(
-                "SCRFD outputs are not named score_<stride>/bbox_<stride>/kps_<stride>. Re-export with Models/export_models.py, or use the Vision face provider."
+                "SCRFD outputs are neither named score_<stride>/bbox_<stride>/kps_<stride> nor shaped [anchors, 1|4|10]. Re-export with Models/export_models.py, or use the Vision face provider."
             )
         }
         self.heads = built

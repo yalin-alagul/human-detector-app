@@ -300,6 +300,38 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(PresetResolver.tuning(for: .auto, hardware: hardware).personSize, .x)
     }
 
+    func testCoreSplitThreeTiers() {
+        // Apple M6: Super, Performance and Efficiency tiers.
+        let split = HardwareProfile.coreSplit(levels: [
+            (name: "Super", cores: 2), (name: "Performance", cores: 4), (name: "Efficiency", cores: 6),
+        ])
+        XCTAssertEqual(split.superCores, 2)
+        XCTAssertEqual(split.performance, 4)
+        XCTAssertEqual(split.efficiency, 6)
+
+        let hardware = HardwareProfile(totalMemoryGB: 24, chipName: "Apple M6", modelIdentifier: "Mac18,5",
+                                       performanceCores: 4, efficiencyCores: 6, superCores: 2)
+        XCTAssertEqual(hardware.physicalCores, 12)
+        XCTAssertEqual(hardware.summary, "Apple M6 · 24 GB · 2S+4P+6E cores")
+        XCTAssertEqual(PresetResolver.autoPreset(for: hardware), .max)
+    }
+
+    func testCoreSplitTwoTiers() {
+        let split = HardwareProfile.coreSplit(levels: [
+            (name: "Performance", cores: 4), (name: "Efficiency", cores: 4),
+        ])
+        XCTAssertEqual(split.superCores, 0)
+        XCTAssertEqual(split.performance, 4)
+        XCTAssertEqual(split.efficiency, 4)
+    }
+
+    func testCoreSplitUnnamedTiers() {
+        let split = HardwareProfile.coreSplit(levels: [(name: "", cores: 8), (name: "", cores: 2)])
+        XCTAssertEqual(split.superCores, 0)
+        XCTAssertEqual(split.performance, 8)
+        XCTAssertEqual(split.efficiency, 2)
+    }
+
     func testJSONRoundTrip() throws {
         var config = ConfigStore.defaultConfig()
         config.io.inputPath = "/tmp/in"

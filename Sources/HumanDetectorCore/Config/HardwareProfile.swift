@@ -12,14 +12,38 @@ public struct HardwareProfile: Sendable, Equatable {
     public let modelIdentifier: String
     public let performanceCores: Int
     public let efficiencyCores: Int
+    /// Cores above the performance tier (the M6's "Super" cores); 0 on
+    /// chips with only performance and efficiency cores.
+    public let superCores: Int
 
-    public var physicalCores: Int { performanceCores + efficiencyCores }
+    public init(
+        totalMemoryGB: Double,
+        chipName: String,
+        modelIdentifier: String,
+        performanceCores: Int,
+        efficiencyCores: Int,
+        superCores: Int = 0
+    ) {
+        self.totalMemoryGB = totalMemoryGB
+        self.chipName = chipName
+        self.modelIdentifier = modelIdentifier
+        self.performanceCores = performanceCores
+        self.efficiencyCores = efficiencyCores
+        self.superCores = superCores
+    }
+
+    public var physicalCores: Int { superCores + performanceCores + efficiencyCores }
 
     /// Human-readable summary for the UI banner.
     public var summary: String {
-        let cores = performanceCores > 0
-            ? "\(performanceCores)P+\(efficiencyCores)E cores"
-            : "\(physicalCores) cores"
+        let cores: String
+        if superCores > 0 {
+            cores = "\(superCores)S+\(performanceCores)P+\(efficiencyCores)E cores"
+        } else if performanceCores > 0 {
+            cores = "\(performanceCores)P+\(efficiencyCores)E cores"
+        } else {
+            cores = "\(physicalCores) cores"
+        }
         return "\(chipName) · \(Int(totalMemoryGB.rounded())) GB · \(cores)"
     }
 
@@ -27,15 +51,50 @@ public struct HardwareProfile: Sendable, Equatable {
         let memoryBytes = Sysctl.uint64("hw.memsize") ?? 0
         let chip = Sysctl.string("machdep.cpu.brand_string") ?? chipFromModelID()
         let model = Sysctl.string("hw.model") ?? "Mac"
-        let perf = Sysctl.uint32("hw.perflevel0.physicalcpu").map(Int.init) ?? 0
-        let eff = Sysctl.uint32("hw.perflevel1.physicalcpu").map(Int.init) ?? 0
+
+        // Chips report one "perflevel" per core tier, fastest first: two on
+        // M1–M5, three on M6 (Super, Performance, Efficiency).
+        let levelCount = Sysctl.uint32("hw.nperflevels").map(Int.init) ?? 0
+        let levels = (0..<levelCount).map { index in
+            (name: Sysctl.string("hw.perflevel\(index).name") ?? "",
+             cores: Sysctl.uint32("hw.perflevel\(index).physicalcpu").map(Int.init) ?? 0)
+        }
+        var split = coreSplit(levels: levels)
+        if split.superCores + split.performance + split.efficiency == 0 {
+            split.performance = Sysctl.uint32("hw.physicalcpu").map(Int.init) ?? 0
+        }
         return HardwareProfile(
             totalMemoryGB: Double(memoryBytes) / 1_073_741_824.0,
             chipName: chip,
             modelIdentifier: model,
-            performanceCores: perf,
-            efficiencyCores: eff
+            performanceCores: split.performance,
+            efficiencyCores: split.efficiency,
+            superCores: split.superCores
         )
+    }
+
+    /// Sort per-tier core counts into super / performance / efficiency by
+    /// tier name. Unnamed tiers fall back to position: the last tier is
+    /// efficiency, the rest performance.
+    static func coreSplit(
+        levels: [(name: String, cores: Int)]
+    ) -> (superCores: Int, performance: Int, efficiency: Int) {
+        var result = (superCores: 0, performance: 0, efficiency: 0)
+        for (index, level) in levels.enumerated() {
+            let name = level.name.lowercased()
+            if name.contains("efficiency") {
+                result.efficiency += level.cores
+            } else if name.contains("performance") {
+                result.performance += level.cores
+            } else if !name.isEmpty {
+                result.superCores += level.cores
+            } else if levels.count > 1, index == levels.count - 1 {
+                result.efficiency += level.cores
+            } else {
+                result.performance += level.cores
+            }
+        }
+        return result
     }
 
     private static func chipFromModelID() -> String {
