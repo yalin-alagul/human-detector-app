@@ -58,7 +58,12 @@ for path in "${candidates[@]}"; do
   [[ -e "$path" ]] && targets+=("$path")
 done
 
-if [[ ${#targets[@]} -eq 0 ]]; then
+# The Hugging Face token the app saved in the login Keychain.
+KEYCHAIN_SERVICE="$BUNDLE_ID.huggingface"
+has_token=0
+security find-generic-password -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1 && has_token=1
+
+if [[ ${#targets[@]} -eq 0 && $has_token -eq 0 ]]; then
   echo "Nothing to remove — Human Detector has no app or data on this Mac."
 else
   echo "Human Detector files on this Mac:"
@@ -66,6 +71,7 @@ else
     size="$(du -sh "$path" 2>/dev/null | cut -f1)"
     printf '  %6s  %s\n' "${size:-?}" "$path"
   done
+  [[ $has_token -eq 1 ]] && printf '  %6s  %s\n' "" "Keychain item $KEYCHAIN_SERVICE (Hugging Face token)"
 fi
 
 if [[ ${#outputs[@]} -gt 0 ]]; then
@@ -75,7 +81,7 @@ if [[ ${#outputs[@]} -gt 0 ]]; then
   done
 fi
 
-if [[ $dry_run -eq 1 || ${#targets[@]} -eq 0 ]]; then
+if [[ $dry_run -eq 1 || ( ${#targets[@]} -eq 0 && $has_token -eq 0 ) ]]; then
   [[ $dry_run -eq 1 ]] && echo && echo "Dry run — nothing was removed."
   exit 0
 fi
@@ -98,6 +104,11 @@ fi
 
 # Clear cached preferences before their file goes, or cfprefsd writes it back.
 defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
+
+if [[ $has_token -eq 1 ]]; then
+  security delete-generic-password -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1 \
+    && echo "  removed Keychain item $KEYCHAIN_SERVICE"
+fi
 
 failed=()
 for path in "${targets[@]}"; do

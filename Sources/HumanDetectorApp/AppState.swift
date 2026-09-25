@@ -25,6 +25,22 @@ final class AppState: ObservableObject {
     @Published var personModelDescription = "—"
     @Published var faceModelDescription = "—"
 
+    /// Installed models merged with what the Hugging Face repo offers.
+    @Published var modelLibrary: [ModelRow] = []
+    /// Download progress (0…1) by model stem.
+    @Published var downloads: [String: Double] = [:]
+    @Published var isCheckingHuggingFace = false
+    @Published var huggingFaceStatus: SourceStatus?
+    @Published var hasToken = KeychainToken.exists
+    @Published var isLoadingModels = false
+    private var modelCheckGeneration = 0
+
+    let modelStore = ModelStore()
+    private var remoteModels: [RemoteModel] = []
+    private var downloadTasks: [String: Task<Void, Never>] = [:]
+    /// Read from the Keychain once, on first use.
+    private var cachedToken: String??
+
     private var pipeline: ScanPipeline?
     private var inputScope: URL?
     private var outputScope: URL?
@@ -49,19 +65,238 @@ final class AppState: ObservableObject {
         refreshModelStatus()
     }
 
+    /// Load the configured models off the main thread (the first load of a
+    /// new model compiles it, which takes seconds) and publish the result.
     func refreshModelStatus() {
-        do {
-            let suite = try DetectorSuite(config: config)
-            modelReady = true
-            modelError = nil
-            personModelDescription = suite.personDescription
-            faceModelDescription = suite.faceDescription
-        } catch {
-            modelReady = false
-            modelError = error.localizedDescription
-            personModelDescription = "missing"
-            faceModelDescription = "—"
+        rebuildModelLibrary()
+        let config = self.config
+        modelCheckGeneration += 1
+        let generation = modelCheckGeneration
+        isLoadingModels = true
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try DetectorSuite(config: config) }
+            }.value
+            guard generation == modelCheckGeneration else { return }
+            isLoadingModels = false
+            switch result {
+            case .success(let suite):
+                modelReady = true
+                modelError = nil
+                personModelDescription = suite.personDescription
+                faceModelDescription = suite.faceDescription
+            case .failure(let error):
+                modelReady = false
+                modelError = error.localizedDescription
+                personModelDescription = "missing"
+                faceModelDescription = "—"
+            }
         }
+    }
+
+    // MARK: - Model library
+
+    var huggingFaceRepoID: String? { config.resolvedModelSource.repoID }
+
+    /// Models the current settings need but that aren't installed yet.
+    var missingNeededModels: [ModelRow] {
+        modelLibrary.filter { $0.isInUse && !$0.isInstalled }
+    }
+
+    private func rebuildModelLibrary() {
+        let installed = Dictionary(modelStore.installed().map { ($0.stem, $0.bytes) }, uniquingKeysWith: { first, _ in first })
+        let remote = Dictionary(remoteModels.map { ($0.stem, $0.bytes) }, uniquingKeysWith: { first, _ in first })
+        let needed = Set(ModelCatalog.stemsNeeded(by: config))
+        let stems = Set(installed.keys).union(remote.keys).union(needed)
+        modelLibrary = stems
+            .sorted { ModelCatalog.sortKey(for: $0) < ModelCatalog.sortKey(for: $1) }
+            .map { stem in
+                ModelRow(
+                    stem: stem,
+                    displayName: ModelCatalog.displayName(for: stem),
+                    installedBytes: installed[stem],
+                    remoteBytes: remote[stem],
+                    isInUse: needed.contains(stem)
+                )
+            }
+    }
+
+    private var token: String? {
+        if cachedToken == nil { cachedToken = .some(KeychainToken.read()) }
+        return cachedToken ?? nil
+    }
+
+    private func huggingFaceClient() -> HuggingFaceClient {
+        HuggingFaceClient(source: config.resolvedModelSource, token: token)
+    }
+
+    /// Ask Hugging Face what the repo holds, so rows show sizes and a
+    /// Download button for every model there.
+    func checkHuggingFace() {
+        guard !isCheckingHuggingFace else { return }
+        guard let repo = huggingFaceRepoID else {
+            huggingFaceStatus = .init(message: HuggingFaceError.notConfigured.localizedDescription, isError: true)
+            return
+        }
+        isCheckingHuggingFace = true
+        let client = huggingFaceClient()
+        Task {
+            do {
+                remoteModels = try await client.listModels()
+                huggingFaceStatus = .init(
+                    message: remoteModels.isEmpty
+                        ? "Connected to \(repo), but it has no .mlpackage models yet."
+                        : "Connected to \(repo): \(remoteModels.count) models available.",
+                    isError: remoteModels.isEmpty
+                )
+            } catch {
+                huggingFaceStatus = .init(message: error.localizedDescription, isError: true)
+            }
+            isCheckingHuggingFace = false
+            rebuildModelLibrary()
+        }
+    }
+
+    /// Check the token, fill in the username if it's empty, then list the repo.
+    func testHuggingFace() {
+        guard let token, !token.isEmpty else {
+            checkHuggingFace()
+            return
+        }
+        isCheckingHuggingFace = true
+        let client = huggingFaceClient()
+        Task {
+            do {
+                let name = try await client.whoami()
+                if config.resolvedModelSource.huggingFaceUsername.trimmingCharacters(in: .whitespaces).isEmpty {
+                    var source = config.resolvedModelSource
+                    source.huggingFaceUsername = name
+                    config.modelSource = source
+                    persistConfigSilently()
+                }
+                isCheckingHuggingFace = false
+                checkHuggingFace()
+            } catch {
+                isCheckingHuggingFace = false
+                huggingFaceStatus = .init(message: error.localizedDescription, isError: true)
+            }
+        }
+    }
+
+    func setModelSource(username: String? = nil, repository: String? = nil) {
+        var source = config.resolvedModelSource
+        if let username { source.huggingFaceUsername = username }
+        if let repository { source.huggingFaceRepo = repository }
+        guard source != config.resolvedModelSource else { return }
+        config.modelSource = source
+        remoteModels = []
+        huggingFaceStatus = nil
+        persistConfigSilently()
+        rebuildModelLibrary()
+    }
+
+    func saveToken(_ value: String) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        do {
+            try KeychainToken.save(trimmed)
+            cachedToken = .some(trimmed)
+            hasToken = true
+            huggingFaceStatus = .init(message: "Token saved in the Keychain.", isError: false)
+        } catch {
+            huggingFaceStatus = .init(message: error.localizedDescription, isError: true)
+        }
+    }
+
+    func clearToken() {
+        KeychainToken.delete()
+        cachedToken = .some(nil)
+        hasToken = false
+        huggingFaceStatus = .init(message: "Token removed.", isError: false)
+    }
+
+    func downloadModel(_ stem: String) {
+        guard downloadTasks[stem] == nil else { return }
+        guard let repo = huggingFaceRepoID else {
+            statusMessage = HuggingFaceError.notConfigured.localizedDescription
+            return
+        }
+        let client = huggingFaceClient()
+        let store = modelStore
+        downloads[stem] = 0
+        downloadTasks[stem] = Task {
+            do {
+                if !remoteModels.contains(where: { $0.stem == stem }) {
+                    remoteModels = try await client.listModels()
+                }
+                guard let model = remoteModels.first(where: { $0.stem == stem }) else {
+                    throw HuggingFaceError.modelNotAvailable(stem, repo: repo)
+                }
+                try await client.download(model, into: store) { fraction in
+                    Task { @MainActor in
+                        if self.downloads[stem] != nil { self.downloads[stem] = fraction }
+                    }
+                }
+                statusMessage = "Downloaded \(ModelCatalog.displayName(for: stem))."
+            } catch is CancellationError {
+                statusMessage = "Download of \(stem) cancelled."
+            } catch {
+                statusMessage = "Couldn't download \(stem): \(error.localizedDescription)"
+            }
+            downloads[stem] = nil
+            downloadTasks[stem] = nil
+            refreshModelStatus()
+        }
+    }
+
+    func cancelDownload(_ stem: String) {
+        downloadTasks[stem]?.cancel()
+    }
+
+    func removeModel(_ stem: String) {
+        guard !isRunning else {
+            statusMessage = "Stop the scan before removing a model."
+            return
+        }
+        do {
+            try modelStore.remove(stem: stem)
+            statusMessage = "Removed \(ModelCatalog.displayName(for: stem)). You can download it again any time."
+        } catch {
+            statusMessage = "Couldn't remove \(stem): \(error.localizedDescription)"
+        }
+        refreshModelStatus()
+    }
+
+    /// Copy `.mlpackage`s the user picks (packages, or folders holding them).
+    func importModels() {
+        let panel = NSOpenPanel()
+        panel.title = "Import CoreML models"
+        panel.message = "Choose .mlpackage models, or a folder that contains them."
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        panel.treatsFilePackagesAsDirectories = false
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        let urls = panel.urls
+        let store = modelStore
+        statusMessage = "Importing models…"
+        Task {
+            do {
+                let stems = try await Task.detached(priority: .userInitiated) {
+                    try store.importPackages(from: urls)
+                }.value
+                statusMessage = "Imported \(stems.joined(separator: ", "))."
+            } catch {
+                statusMessage = "Couldn't import models: \(error.localizedDescription)"
+            }
+            refreshModelStatus()
+        }
+    }
+
+    func revealModelsFolder() {
+        try? FileManager.default.createDirectory(at: modelStore.directory, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(modelStore.directory)
     }
 
     // MARK: - Folders
@@ -346,6 +581,29 @@ final class AppState: ObservableObject {
         PresetResolver.apply(preset, hardware: hardware, to: &config)
         refreshModelStatus()
     }
+}
+
+/// One model in the library: installed, available on Hugging Face, or needed
+/// by the current settings (any combination).
+struct ModelRow: Identifiable, Equatable {
+    let stem: String
+    let displayName: String
+    let installedBytes: Int64?
+    let remoteBytes: Int64?
+    /// The current preset / face settings use this model.
+    let isInUse: Bool
+
+    var id: String { stem }
+    var isInstalled: Bool { installedBytes != nil }
+    var sizeText: String? {
+        (installedBytes ?? remoteBytes).map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) }
+    }
+}
+
+/// Result of the last Hugging Face check, shown in Settings and on Models.
+struct SourceStatus: Equatable {
+    let message: String
+    let isError: Bool
 }
 
 /// Decoded image plus the detections found on it, for the review preview.

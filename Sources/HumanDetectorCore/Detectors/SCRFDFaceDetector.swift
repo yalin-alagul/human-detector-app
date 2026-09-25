@@ -29,7 +29,7 @@ public final class SCRFDFaceDetector: FaceDetecting, @unchecked Sendable {
 
     public init(config: FaceConfig, scoreThreshold: Float = 0.2) throws {
         guard let url = ModelRegistry.scrfdModelURL(for: config) else {
-            throw DetectorError.modelNotFound("scrfd_10g_bnkps")
+            throw DetectorError.modelNotFound(ModelCatalog.scrfdStem)
         }
         let model = try CoreMLLoader.loadModel(at: url, computeUnit: config.computeUnit)
         self.model = model

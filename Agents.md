@@ -159,7 +159,19 @@ corrections. See `README.md` for the full guide.
 
 - **Runtime is SwiftUI + CoreML + Vision.** No Python, no PyTorch, no ONNX
   Runtime at runtime. Python is used once, by `Models/export_models.py`, to
-  produce `.mlpackage` files.
+  produce `.mlpackage` files, and by `Models/upload_to_hf.py` to put them on
+  Hugging Face.
+- **Models are not bundled.** The app ships without models (about 3 MB) and
+  downloads them from a Hugging Face repo (`<username>/human-detector-models`,
+  private by default; username, repository and token in Settings, the token in
+  the Keychain) into `Application Support/HumanDetector/Models`. The Dashboard
+  and the Models page download, remove, re-download and import them. Every
+  model is optional.
+- **One installed app.** `make install` / `make run` build Release into
+  `/Applications` and delete the build product; build folders are `*.noindex`
+  and unregistered from LaunchServices so no second copy shows up.
+  `/System/Applications` is read-only (sealed system volume). The app is
+  arm64-only.
 - **HEIC is handled by ImageIO**, not `pillow-heif`.
 - **Faces** default to Vision's built-in detector; SCRFD is available as an
   optional CoreML export.
@@ -177,7 +189,8 @@ corrections. See `README.md` for the full guide.
 - **Calibration is a first-class screen.** Raw scores are cached so thresholds
   can be re-tuned with zero extra inference.
 - **The CLI is a separate non-sandboxed binary**; the shipped app is sandboxed
-  and notarizable, with no network entitlement.
+  and notarizable. Its only network entitlement is `network.client`, used to
+  download models.
 
 ### Goal switch
 

@@ -32,14 +32,19 @@ public enum CoreMLLoader {
         }
     }
 
+    /// Where compiled `.mlmodelc` copies are cached, one per model stem.
+    public static var compiledDirectory: URL {
+        let fm = FileManager.default
+        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fm.temporaryDirectory
+        return base.appendingPathComponent("HumanDetector/CompiledModels", isDirectory: true)
+    }
+
     /// Compile into Application Support so repeat launches are fast, and
     /// recompile when the source package is newer.
     public static func compiledURL(for package: URL) throws -> URL {
         let fm = FileManager.default
-        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? fm.temporaryDirectory
-        let dir = base
-            .appendingPathComponent("HumanDetector/CompiledModels", isDirectory: true)
+        let dir = compiledDirectory
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let stem = package.deletingPathExtension().lastPathComponent
