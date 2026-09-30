@@ -5,6 +5,7 @@
 #   make app      build the macOS app
 #   make run      build, refresh build/Human Detector.app, and open it
 #   make models   export the CoreML models (needs the Python venv)
+#   make dmg      build an unsigned build/HumanDetector.dmg (what releases ship)
 #   make hooks    install the pre-push test gate in this clone
 #   make ci       run exactly what CI runs
 
@@ -13,7 +14,7 @@ APP_NAME := Human Detector.app
 APP := $(DERIVED)/Build/Products/Debug/$(APP_NAME)
 STAGED := build/$(APP_NAME)
 
-.PHONY: test xctest app run models icon cli hooks ci clean
+.PHONY: test xctest app run models dmg icon cli hooks ci clean
 
 test:
 	swift test
@@ -40,6 +41,9 @@ cli:
 
 models:
 	.venv/bin/python Models/export_models.py --family yolo26 --sizes n s m x --task seg
+
+dmg:
+	Scripts/make_dmg.sh
 
 icon:
 	.venv/bin/python Scripts/generate_app_icon.py

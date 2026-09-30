@@ -18,6 +18,29 @@ the GUI, in Settings, or on the CLI with `--goal keep|remove`.
 Built native: **SwiftUI + CoreML + Vision**, no Python at runtime. Everything
 runs on-device and offline.
 
+**Free for noncommercial use** under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). See [License](#license).
+
+## Download
+
+Get the latest `HumanDetector.dmg` from the
+[Releases page](https://github.com/yalin-alagul/human-detector-app/releases/latest).
+It needs a Mac with **Apple Silicon** running **macOS 14 or later**.
+
+The app is not yet signed with an Apple Developer ID, so macOS will refuse to
+open it the first time. To allow it, drag it into **Applications**, then
+**right-click → Open → Open**. If macOS says the app is damaged, run:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Human Detector.app"
+```
+
+The download ships **without YOLO models**. It still works: it falls back to
+Apple's built-in Vision detectors (faces, human rectangles, body pose), which
+catch fewer people than YOLO. The Dashboard's **Person model** tile shows
+*not installed (Apple Vision only)* in that mode. For best recall, export a
+model yourself, as described in [Models and licenses](#models-and-licenses).
+
 ---
 
 ## Why the stack changed from the original plan
@@ -43,7 +66,11 @@ The Python export script is still there, but it runs **once** to produce
 
 ## Quick start
 
-### 1. Export the models (once)
+### 1. Export the models (once, optional)
+
+Skip this step to run on Apple Vision alone. Read
+[Models and licenses](#models-and-licenses) first: the models are third-party
+and carry their own terms.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -260,7 +287,11 @@ it:
 
 The app is sandboxed (`Sources/HumanDetectorApp/HumanDetector.entitlements`)
 with user-selected read/write, app-scoped bookmarks, and **no network
-entitlement** — models are bundled, so the app never phones home.
+entitlement**, so the app never phones home. Models are never downloaded; you
+add them to the bundle yourself.
+
+To package an unsigned DMG (what the GitHub release workflow does), run
+`make dmg`; it writes `build/HumanDetector.dmg`.
 
 To ship a signed, notarized build:
 
@@ -303,3 +334,31 @@ swift test
 
 Covers the decision engine, NMS, tiler coordinate mapping, file mover
 collisions, deduplication, preset resolution, and JSON config round-trips.
+
+## Models and licenses
+
+This repository contains **no model weights**, and the downloadable app ships
+none. Model files are third-party and keep their own licenses, which the
+project license below does not change:
+
+| Model | Source | Terms (check upstream for the current text) |
+|---|---|---|
+| Apple Vision faces, human rectangles, body pose | Built into macOS | Part of the OS; nothing to install |
+| YOLO26 / YOLO11 person models | Ultralytics | AGPL-3.0, or a paid Ultralytics Enterprise License |
+| SCRFD face model (optional) | InsightFace `buffalo_l` pack | Non-commercial research use only |
+
+`Models/export_models.py` downloads and converts the YOLO and SCRFD models on
+your own machine, for your own use. Please **don't upload the exported models to
+a public repository or release**: redistributing them is governed by the
+licenses above, not by this project's license. If you publish anything built
+from them, you are responsible for complying with those terms.
+
+## License
+
+Copyright 2026 Yalin Alagul. Released under the
+[PolyForm Noncommercial License 1.0.0](LICENSE): free for personal, hobby,
+research, educational and other noncommercial use, including by charities and
+schools. **Commercial use is not permitted.** Contact the author if you want a
+commercial license.
+
+This is a *source-available* license, not an OSI-approved open-source license.

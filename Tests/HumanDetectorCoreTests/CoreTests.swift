@@ -310,6 +310,20 @@ final class ConfigTests: XCTestCase {
     }
 }
 
+final class DetectorSuiteTests: XCTestCase {
+    func testMissingPersonModelFallsBackToVision() throws {
+        let config = AppConfig()
+        try XCTSkipIf(
+            ModelRegistry.personModelURL(for: config.person) != nil,
+            "A person model is installed on this machine, so there is nothing to fall back from."
+        )
+        let suite = try DetectorSuite(config: config)
+        XCTAssertNil(suite.person)
+        XCTAssertFalse(suite.faceDetectors.isEmpty)
+        XCTAssertTrue(suite.notes.contains { $0.contains("Apple Vision") })
+    }
+}
+
 final class DecoderTests: XCTestCase {
     func testAttributeSpecCOCO() {
         XCTAssertEqual(YOLODecoder.AttributeSpec(channels: 84).numClasses, 80)
