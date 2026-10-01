@@ -15,8 +15,8 @@ meaning of the folders:
 Detection is identical either way; only the verdict mapping changes. Set it in
 the GUI, in Settings, or on the CLI with `--goal keep|remove`.
 
-Built native: **SwiftUI + CoreML + Vision**, no Python at runtime. Everything
-runs on-device and offline.
+Built native: **SwiftUI + CoreML + Vision**, no Python at runtime. Scanning
+runs on-device and offline; the network is used only to download models.
 
 **Free for noncommercial use** under the
 [PolyForm Noncommercial License 1.0.0](LICENSE). See [License](#license).
@@ -39,7 +39,8 @@ The download ships **without YOLO models**. It still works: it falls back to
 Apple's built-in Vision detectors (faces, human rectangles, body pose), which
 catch fewer people than YOLO. The Dashboard's **Person model** tile shows
 *not installed (Apple Vision only)* in that mode. For best recall, export a
-model yourself, as described in [Models and licenses](#models-and-licenses).
+model and download it in the app (see [Quick start](#quick-start) and
+[Models and licenses](#models-and-licenses)).
 
 ---
 
@@ -66,46 +67,91 @@ The Python export script is still there, but it runs **once** to produce
 
 ## Quick start
 
-### 1. Export the models (once, optional)
+### 1. Install the app
 
-Skip this step to run on Apple Vision alone. Read
-[Models and licenses](#models-and-licenses) first: the models are third-party
-and carry their own terms.
+Needs the full Xcode app, not just the Command Line Tools. A new Mac points
+`xcode-select` at the Command Line Tools, which have no XCTest or `xcodebuild`;
+the Makefile and pre-push hook switch to `/Applications/Xcode.app` on their own.
+To fix it for plain `swift test` / `xcodebuild` too, run once:
+`sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
+
+```bash
+brew install xcodegen        # once
+make install                 # Release build → /Applications/Human Detector.app
+make run                     # the same, then open it
+```
+
+`make install` builds, quits a running copy, installs to `/Applications`, and
+deletes the build product, so there is exactly one Human Detector on the Mac
+(build folders are `*.noindex`, so Spotlight and Launchpad never list them
+either). It can't go in `/System/Applications`: that folder is on the sealed,
+read-only system volume. Finder's **Applications** shows both folders merged,
+so it sits next to the built-in apps anyway.
+
+The app is Apple Silicon only (arm64): it's tuned for the Neural Engine.
+
+### 2. Download models in the app
+
+The app ships **without models** (it's about 3 MB) and runs fine without them;
+you add them on the Mac that uses them.
+
+1. **Settings → Hugging Face**: enter the **Username** that owns the model repo
+   and the **Repository** (default `human-detector-models`). If the repo is
+   private, paste an **Access token** (read access is enough, from
+   huggingface.co/settings/tokens) and press **Save**; it's kept in the
+   Keychain, never in the config file. **Test connection** checks the token,
+   fills in the username if it's empty, and lists the repo.
+2. **Dashboard → Models**: every model shows **Download**, **Remove**, or a
+   progress bar with **Cancel**. The one your preset uses is tagged *In use*,
+   and if it's missing the Dashboard shows a one-click **Download** at the top.
+   The **Models** page in the sidebar is the same list plus the storage path.
+
+Models are stored in `~/Library/Application Support/HumanDetector/Models/`
+(inside the app's container when it runs sandboxed), not in the app bundle: a
+signed bundle can't change. Each file is checked against the size and SHA-256
+Hugging Face records for it, and a package only appears once every file is in.
+Removing a model deletes it and its compiled cache; download it again any time.
+
+No network? **Import from folder…** copies `.mlpackage`s from anywhere, e.g.
+this repo's `Resources/Models/`.
+
+### 3. Put the models on Hugging Face (once)
+
+Export them from Ultralytics / InsightFace, then upload the folder to your
+Hugging Face account. Each `.mlpackage` is stored as a plain folder in the repo
+(`yolo26x-seg.mlpackage/Manifest.json`, `…/Data/com.apple.CoreML/…`).
+
+> **Licenses:** these models are third-party (see
+> [Models and licenses](#models-and-licenses)). Keep the Hugging Face repo
+> **private** unless you have checked that you may redistribute them.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install ultralytics coremltools onnx onnxruntime onnx2torch torch
+pip install ultralytics coremltools onnx onnxruntime onnx2torch torch huggingface_hub
 
 # Person models (YOLO26 seg, all sizes). Use --family yolo11 for the fallback line.
 python Models/export_models.py --family yolo26 --sizes n s m x --task seg
 
 # Optional tiny-face specialist
 python Models/export_models.py --scrfd
+
+hf auth login                # a token with write access (or export HF_TOKEN=…)
+make models-upload HF_REPO=<username>/human-detector-models
 ```
 
-Models land in `Resources/Models/` and are compiled into the app bundle by Xcode
-(`.mlpackage` → `.mlmodelc`). Sizes are chosen per model tier:
-`n=640, s=960, m=960, x=1280` (override with `--imgsz` or `--imgsz-map`).
+The repo is created **private** if it doesn't exist (`--public` in
+`Models/upload_to_hf.py` makes it public), so the app needs the token to read
+it. Every model is optional; upload only the ones you want (`--only yolo26m-seg`).
+Export sizes are chosen per tier: `n=640, s=960, m=960, x=1280` (override with
+`--imgsz` or `--imgsz-map`).
 
 > **SCRFD note:** recent coremltools releases removed the ONNX frontend, so the
 > SCRFD path routes through `onnx2torch` (ONNX → PyTorch → CoreML) instead.
-> `--scrfd` therefore needs `onnx`, `onnx2torch`, and `torch` installed.
+> `--scrfd` therefore needs `onnx`, `onnx2torch`, and `torch` installed. The
+> InsightFace weights are licensed for non-commercial research use only; keep
+> the repo private if you upload them.
 
-### 2. Build the app
-
-```bash
-brew install xcodegen        # once
-xcodegen generate
-open HumanDetector.xcodeproj
-```
-
-Or from the command line:
-
-```bash
-xcodebuild -project HumanDetector.xcodeproj -scheme HumanDetector -configuration Release build
-```
-
-### 3. Or use the headless CLI
+### 4. Or use the headless CLI
 
 ```bash
 swift build -c release
@@ -115,16 +161,29 @@ swift build -c release
 .build/release/humandetector reset --output ~/Sorted   # forget past decisions
 ```
 
+The CLI uses the models the app downloaded, or `./Models`, `./Resources/Models`,
+or `HUMAN_DETECTOR_MODELS=<folder>`.
+
 ### Make targets
 
 ```bash
-make test     # unit tests via SwiftPM
-make xctest   # the same tests through Xcode (⌘U equivalent)
-make app      # build the macOS app
-make run      # build, refresh build/Human Detector.app, and open it
-make models   # export the CoreML models
-make icon     # regenerate the app icon / logo assets
+make test       # unit tests via SwiftPM
+make xctest     # the same tests through Xcode (⌘U equivalent)
+make app        # check the macOS app builds (Debug; what CI runs)
+make install    # build a Release app into /Applications, delete the build copy
+make run        # install, then open it
+make models     # export the CoreML models into Resources/Models
+make models-upload HF_REPO=<user>/human-detector-models   # upload them to Hugging Face
+make icon       # regenerate the app icon / logo assets
+make clean      # delete build outputs (.build, build)
+make uninstall  # remove the app and its data from this Mac (lists and asks first)
 ```
+
+`make uninstall` removes the app, its settings, downloaded and compiled models,
+the Hugging Face token in the Keychain, and the build outputs. It never touches
+your photos or output folders; delete the project folder yourself to remove the
+source and local exports. `Scripts/uninstall.sh --dry-run` only lists what it
+would remove.
 
 ---
 
@@ -210,7 +269,7 @@ The app detects RAM and cores and recommends a preset. You can override it.
 |---|---|---|---|---|
 | Lite | `…n-seg` | 640 | 2 | 8 GB machines |
 | Balanced | `…m-seg` | 960 | 4 | 16 GB (this dev Mac: M1, 16 GB) |
-| Max | `…x-seg` | 1280 | 6 | 24 GB+ (e.g. a future M6 Mac mini) |
+| Max | `…x-seg` | 1280 | 6 | 24 GB+ (verified on an M6 Mac mini, 24 GB) |
 | Custom | your choice | your choice | your choice | — |
 
 **The “best model” default is `yolo26x-seg` at 1280 px on a 24 GB machine.**
@@ -240,7 +299,9 @@ overnight batches.
 Numbers are end-to-end (decode + inference + move + manifest). The ANE
 serializes inference, so concurrency overlaps decoding rather than predictions.
 A 24 GB machine with a newer chip should run the `x` model several times
-faster; measure with `humandetector scan` before a big batch.
+faster; measure with `humandetector scan` before a big batch. The first `x`
+load on a new Mac takes ~45 s while CoreML compiles it for the Neural Engine;
+later launches reuse the compiled copy.
 
 ---
 
@@ -286,9 +347,14 @@ it:
 ## Sandboxing, signing, and distribution
 
 The app is sandboxed (`Sources/HumanDetectorApp/HumanDetector.entitlements`)
-with user-selected read/write, app-scoped bookmarks, and **no network
-entitlement**, so the app never phones home. Models are never downloaded; you
-add them to the bundle yourself.
+with user-selected read/write, app-scoped bookmarks, and a **network client**
+entitlement used only to download models from Hugging Face. It never uploads
+anything; your photos stay on the Mac.
+
+`make install` signs ad-hoc without entitlements, so a local install runs
+unsandboxed and keeps its data in `~/Library/Application Support/HumanDetector`.
+A Developer ID build signed with the entitlements file runs sandboxed and keeps
+the same folders inside `~/Library/Containers/com.humandetector.app`.
 
 To package an unsigned DMG (what the GitHub release workflow does), run
 `make dmg`; it writes `build/HumanDetector.dmg`.
@@ -318,11 +384,13 @@ Sources/
     Config/                  # AppConfig, presets, hardware detection
     IO/                      # ImageIO loader, SHA-256, manifest, mover, undo
     Detectors/               # CoreML YOLO, Vision faces/signals, SCRFD
+    ModelLibrary/            # model store (install/remove/import), Hugging Face client
     Pipeline/                # tiler, dedup, decision engine, scan, calibrator
     Models/                  # Detection, ManifestEntry
   HumanDetectorApp/          # SwiftUI app (dashboard, run, review, calibrate)
   HumanDetectorCLI/          # headless runner
 Models/export_models.py      # one-time CoreML export
+Models/upload_to_hf.py       # upload the exports to your Hugging Face repo
 Tests/                       # unit tests
 ```
 
@@ -333,7 +401,8 @@ swift test
 ```
 
 Covers the decision engine, NMS, tiler coordinate mapping, file mover
-collisions, deduplication, preset resolution, and JSON config round-trips.
+collisions, deduplication, preset resolution, JSON config round-trips, and the
+model library (install/remove/import, Hugging Face listing and checksums).
 
 ## Models and licenses
 

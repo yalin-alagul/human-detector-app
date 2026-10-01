@@ -15,9 +15,6 @@ targets:
     platform: macOS
     sources:
       - path: Sources/HumanDetectorApp
-      - path: Resources/Models
-        optional: true
-        buildPhase: resources
     dependencies:
       - package: HumanDetectorCore
         product: HumanDetectorCore

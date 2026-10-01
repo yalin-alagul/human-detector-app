@@ -3,10 +3,12 @@ import HumanDetectorCore
 
 struct SettingsView: View {
     @EnvironmentObject private var state: AppState
+    @State private var tokenDraft = ""
 
     var body: some View {
         Form {
             goalSection
+            huggingFaceSection
             personSection
             faceSection
             signalSection
@@ -18,15 +20,20 @@ struct SettingsView: View {
             uiSection
         }
         .formStyle(.grouped)
+        // Keep the model list and Start button in step with the chosen model.
+        .onChange(of: state.config.person.modelStem) { _, _ in state.refreshModelStatus() }
+        .onChange(of: state.config.face.provider) { _, _ in state.refreshModelStatus() }
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Button("Restore defaults") {
-                    // Keep the folders the user picked; only reset tuning.
+                    // Keep the folders and model source; only reset tuning.
                     let input = state.config.io.inputPath
                     let output = state.config.io.outputPath
+                    let source = state.config.modelSource
                     state.config = ConfigStore.defaultConfig(hardware: state.hardware)
                     state.config.io.inputPath = input
                     state.config.io.outputPath = output
+                    state.config.modelSource = source
                     state.refreshModelStatus()
                 }
                 Spacer()
@@ -51,6 +58,52 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private var huggingFaceSection: some View {
+        Section {
+            TextField("Username", text: Binding(
+                get: { state.config.resolvedModelSource.huggingFaceUsername },
+                set: { state.setModelSource(username: $0) }
+            ), prompt: Text("your-hf-username"))
+            TextField("Repository", text: Binding(
+                get: { state.config.resolvedModelSource.huggingFaceRepo },
+                set: { state.setModelSource(repository: $0) }
+            ), prompt: Text(ModelSource.defaultRepository))
+            HStack {
+                SecureField("Access token", text: $tokenDraft,
+                            prompt: Text(state.hasToken ? "Saved in Keychain" : "hf_…"))
+                    .onSubmit { saveToken() }
+                Button("Save") { saveToken() }
+                    .disabled(tokenDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Clear") { state.clearToken() }
+                    .disabled(!state.hasToken)
+            }
+            HStack {
+                Button("Test connection") { state.testHuggingFace() }
+                    .disabled(state.isCheckingHuggingFace)
+                if state.isCheckingHuggingFace {
+                    ProgressView().controlSize(.small)
+                }
+                if let status = state.huggingFaceStatus {
+                    Text(status.message)
+                        .font(.caption)
+                        .foregroundStyle(status.isError ? Color.orange : Color.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } header: {
+            Text("Hugging Face")
+        } footer: {
+            Text("Models download from huggingface.co/<username>/<repository>. A token is needed only for a private repo; a read-only token from huggingface.co/settings/tokens is enough. Leave the username empty and press Test connection to fill it from the token.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func saveToken() {
+        state.saveToken(tokenDraft)
+        tokenDraft = ""
     }
 
     private var personSection: some View {

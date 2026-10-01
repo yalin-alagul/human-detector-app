@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:human-detector}",
+            "name": "Debug humandetector",
+            "target": "humandetector",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug humandetector"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:human-detector}",
+            "name": "Release humandetector",
+            "target": "humandetector",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release humandetector"
+        }
+    ]
+}

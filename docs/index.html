@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Human Detector for Mac</title>
-<meta name="description" content="Sort a photo library by whether people are in it. Runs on your Mac, offline. Nothing is deleted and every run can be undone.">
+<meta name="description" content="Sort a photo library by whether people are in it. Runs on your Mac and your photos never leave it. Nothing is deleted and every run can be undone.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" type="image/png" href="favicon.png">
 <meta property="og:title" content="Human Detector for Mac">
-<meta property="og:description" content="Sort a photo library by whether people are in it. Offline, undoable, free for noncommercial use.">
+<meta property="og:description" content="Sort a photo library by whether people are in it. Private, undoable, free for noncommercial use.">
 <meta property="og:image" content="icon.png">
 <style>
   :root {
@@ -111,7 +111,7 @@
   <div class="wrap">
     <img src="icon.png" alt="Human Detector app icon: a person inside a camera viewfinder" width="136" height="136">
     <h1>Human Detector</h1>
-    <p class="lede">Sort a photo library by whether people are in it. Everything runs on your Mac, offline. Nothing is deleted, and every run can be undone.</p>
+    <p class="lede">Sort a photo library by whether people are in it. Detection runs entirely on your Mac. Nothing is deleted, and every run can be undone.</p>
     <div class="cta">
       <a class="btn primary" href="https://github.com/yalin-alagul/human-detector-app/releases/latest/download/HumanDetector.dmg">Download for Mac</a>
       <a class="btn" href="https://github.com/yalin-alagul/human-detector-app">View source</a>
@@ -146,7 +146,7 @@
     <div class="grid two">
       <div class="card"><h3>Nothing is deleted</h3><p>Files are moved, never removed. By default, a name collision gets a suffix instead of an overwrite.</p></div>
       <div class="card"><h3>Undo any run</h3><p>Every move is journalled. <em>Undo Last Run</em> puts the files back where they were.</p></div>
-      <div class="card"><h3>Private by design</h3><p>No account, no upload, no network access. Your photos never leave the machine.</p></div>
+      <div class="card"><h3>Private by design</h3><p>No account and no upload. Your photos never leave the machine. The app goes online only if you choose to download optional models.</p></div>
       <div class="card"><h3>Tune it on your photos</h3><p>Calibrate on a random sample and drag thresholds with instant feedback, before you run the whole library.</p></div>
     </div>
   </section>
@@ -156,7 +156,7 @@
     <p class="sub">No detector is perfect, and this one says so instead of hiding it.</p>
     <div class="note">
       <p style="margin:0 0 10px"><strong>The download runs on Apple Vision only.</strong> It detects faces, human outlines and body pose, and it catches fewer people than a dedicated YOLO model, especially small or partly hidden figures.</p>
-      <p style="margin:0">For best results, add a YOLO model yourself (the README explains how). Whichever you use, calibrate first and spot-check a random batch of <code>clean/</code> before deleting anything. If a missed photo would be a real problem, check <code>review/</code> by hand.</p>
+      <p style="margin:0">For best results, add a YOLO model yourself: export one and download it into the app from your own Hugging Face repo, or import it from a folder (the README explains how). Whichever you use, calibrate first and spot-check a random batch of <code>clean/</code> before deleting anything. If a missed photo would be a real problem, check <code>review/</code> by hand.</p>
     </div>
   </section>
 

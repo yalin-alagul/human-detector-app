@@ -38,6 +38,6 @@ jobs:
             -scheme HumanDetector \
             -configuration Debug \
             -destination 'platform=macOS' \
-            -derivedDataPath build/DerivedData \
+            -derivedDataPath build/DerivedData.noindex \
             CODE_SIGNING_ALLOWED=NO \
             build
