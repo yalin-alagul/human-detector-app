@@ -24,14 +24,18 @@ ENTITLEMENTS="Sources/HumanDetectorApp/HumanDetector.entitlements"
 echo "▶ xcodegen generate"
 xcodegen generate >/dev/null
 
-echo "▶ xcodebuild (Release, unsigned)"
+# Release builds every architecture by default, but this app is Apple Silicon
+# only (Float16 doesn't exist on Intel), so the x86_64 slice fails to compile.
+# ARCHS goes on the command line so it also reaches the Swift package.
+echo "▶ xcodebuild (Release, arm64, unsigned)"
 xcodebuild \
   -project HumanDetector.xcodeproj \
   -scheme HumanDetector \
   -configuration Release \
-  -destination 'platform=macOS' \
+  -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath build/DerivedData \
   CODE_SIGNING_ALLOWED=NO \
+  ARCHS=arm64 \
   build >/dev/null
 
 [ -d "$APP_DIR" ] || { echo "error: $APP_DIR was not produced" >&2; exit 1; }
