@@ -5,6 +5,12 @@
 #
 set -euo pipefail
 
+# Command Line Tools have no XCTest or xcodebuild; use Xcode when it's there.
+if [[ -z "${DEVELOPER_DIR:-}" && "$(xcode-select -p 2>/dev/null)" == *CommandLineTools* \
+      && -d /Applications/Xcode.app/Contents/Developer ]]; then
+  export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+fi
+
 echo "▶ pre-push: swift test"
 swift test
 
@@ -12,12 +18,17 @@ if command -v xcodegen >/dev/null 2>&1; then
   echo "▶ pre-push: xcodegen generate"
   xcodegen generate >/dev/null
   echo "▶ pre-push: xcodebuild build"
+  # Xcode registers what it builds with LaunchServices; don't leave a second
+  # copy of the app around, even if the build fails. The installed one in
+  # /Applications is the app.
+  built="build/DerivedData.noindex/Build/Products/Debug/Human Detector.app"
+  trap '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -u "$built" 2>/dev/null; rm -rf "$built"' EXIT
   xcodebuild \
     -project HumanDetector.xcodeproj \
     -scheme HumanDetector \
     -configuration Debug \
     -destination 'platform=macOS' \
-    -derivedDataPath build/DerivedData \
+    -derivedDataPath build/DerivedData.noindex \
     CODE_SIGNING_ALLOWED=NO \
     build >/dev/null
 else

@@ -17,9 +17,14 @@ public struct AppConfig: Codable, Sendable, Equatable {
     public var behavior: BehaviorConfig
     public var qa: QAConfig
     public var ui: UIConfig
+    /// Optional so configs written before model downloads existed still decode.
+    public var modelSource: ModelSource?
 
     /// The active goal, with a safe fallback for older config files.
     public var resolvedGoal: DetectionGoal { goal ?? .keepHumans }
+
+    /// Where models download from, with defaults for older config files.
+    public var resolvedModelSource: ModelSource { modelSource ?? ModelSource() }
 
     public init(
         goal: DetectionGoal? = .keepHumans,
@@ -32,7 +37,8 @@ public struct AppConfig: Codable, Sendable, Equatable {
         performance: PerformanceConfig = .init(),
         behavior: BehaviorConfig = .init(),
         qa: QAConfig = .init(),
-        ui: UIConfig = .init()
+        ui: UIConfig = .init(),
+        modelSource: ModelSource? = nil
     ) {
         self.goal = goal
         self.io = io
@@ -45,6 +51,32 @@ public struct AppConfig: Codable, Sendable, Equatable {
         self.behavior = behavior
         self.qa = qa
         self.ui = ui
+        self.modelSource = modelSource
+    }
+}
+
+// MARK: - Model source
+
+/// The Hugging Face model repo the app downloads `.mlpackage`s from:
+/// `huggingface.co/<username>/<repository>`. The access token is not stored
+/// here; the app keeps it in the Keychain.
+public struct ModelSource: Codable, Sendable, Equatable {
+    public static let defaultRepository = "human-detector-models"
+
+    public var huggingFaceUsername: String
+    public var huggingFaceRepo: String
+
+    public init(huggingFaceUsername: String = "", huggingFaceRepo: String = ModelSource.defaultRepository) {
+        self.huggingFaceUsername = huggingFaceUsername
+        self.huggingFaceRepo = huggingFaceRepo
+    }
+
+    /// `username/repository`, or nil until a username is set.
+    public var repoID: String? {
+        let user = huggingFaceUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+        let repo = huggingFaceRepo.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !user.isEmpty else { return nil }
+        return "\(user)/\(repo.isEmpty ? Self.defaultRepository : repo)"
     }
 }
 
@@ -90,7 +122,7 @@ public struct PersonConfig: Codable, Sendable, Equatable {
     public var family: ModelFamily
     public var size: ModelSize
     public var task: ModelTask
-    /// Overrides the resolved bundled model when non-nil (path to an `.mlpackage` or `.mlmodelc`).
+    /// Overrides the installed model when non-nil (path to an `.mlpackage` or `.mlmodelc`).
     public var customModelPath: String?
     /// Square inference resolution. Higher catches smaller figures and costs more time.
     public var imageSize: Int
@@ -132,7 +164,7 @@ public struct PersonConfig: Codable, Sendable, Equatable {
         self.maxDetections = maxDetections
     }
 
-    /// The bundled model file stem, e.g. `yolo26x-seg`.
+    /// The model file stem, e.g. `yolo26x-seg`.
     public var modelStem: String {
         "\(family.rawValue)\(size.rawValue)-\(task.rawValue)"
     }

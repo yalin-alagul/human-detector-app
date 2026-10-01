@@ -8,13 +8,14 @@ struct DashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.gap) {
-                if !state.modelReady {
+                if (!state.modelReady || state.personModelMissing) && !state.isLoadingModels {
                     modelWarning
                 }
 
                 goalCard
                 folderCard
                 tuningCard
+                modelsCard
 
                 if let summary = state.summary {
                     summaryCard(summary)
@@ -29,14 +30,50 @@ struct DashboardView: View {
     }
 
     private var modelWarning: some View {
-        Card("Models not loaded", systemImage: "exclamationmark.triangle.fill") {
+        Card(state.modelReady ? "No person model" : "Models not loaded", systemImage: "exclamationmark.triangle.fill") {
             VStack(alignment: .leading, spacing: 10) {
-                Text(state.modelError ?? "Add a YOLO .mlpackage to Resources/Models.")
+                Text(state.modelError ?? (state.modelReady
+                    ? "Scans use Apple Vision only, which catches fewer people. Download a person model for better results."
+                    : "Download a person model to start scanning."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("Set up models") { selection = .models }
+                if state.huggingFaceRepoID == nil {
+                    Text("Models download from your Hugging Face repo. Add your username (and a token if the repo is private) in Settings.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Open Settings") { selection = .settings }
+                } else {
+                    HStack(spacing: Theme.rowGap) {
+                        ForEach(state.missingNeededModels) { row in
+                            Button {
+                                state.downloadModel(row.stem)
+                            } label: {
+                                Label(
+                                    row.sizeText.map { "Download \(row.stem) (\($0))" } ?? "Download \(row.stem)",
+                                    systemImage: "arrow.down.circle"
+                                )
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(state.downloads[row.stem] != nil)
+                        }
+                    }
+                }
             }
+        }
+    }
+
+    private var modelsCard: some View {
+        Card(
+            "Models",
+            systemImage: "shippingbox",
+            trailing: AnyView(
+                Button("Manage…") { selection = .models }
+                    .controlSize(.small)
+            )
+        ) {
+            ModelLibraryView()
         }
     }
 

@@ -98,6 +98,9 @@ def export_person(
         if target.exists():
             shutil.rmtree(target)
         shutil.copytree(exported, target)
+        # Ultralytics writes the package next to the weights; drop that copy
+        # so the repo root doesn't collect duplicate models.
+        shutil.rmtree(exported)
         log(f"  -> {target.relative_to(REPO_ROOT)}")
 
 
@@ -171,8 +174,11 @@ def export_scrfd(input_size: int, quantize: int | None) -> None:
         except Exception as error:  # pragma: no cover - optional optimisation
             log(f"  INT8 weight quantisation skipped: {error}")
 
+    # get_spec() returns a copy, so the renamed spec must become the model we
+    # save; renaming alone leaves the saved outputs as var_717, ...
     spec = mlmodel.get_spec()
     rename_scrfd_outputs(spec)
+    mlmodel = ct.models.MLModel(spec, weights_dir=mlmodel.weights_dir)
     out_path = DEST / f"{SCRFD_STEM}.mlpackage"
     if out_path.exists():
         shutil.rmtree(out_path)

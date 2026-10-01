@@ -1,0 +1,43 @@
+name: Release
+
+# Push a tag such as v1.0.0 to build the DMG and publish a GitHub Release.
+# "Run workflow" from the Actions tab builds the DMG and attaches it to the run
+# as an artifact without publishing anything, which is the way to test this.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  dmg:
+    name: Build DMG
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Tests
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build DMG
+        run: Scripts/make_dmg.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HumanDetector-dmg
+          path: build/HumanDetector.dmg
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" build/HumanDetector.dmg \
+            --title "Human Detector $GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "Requires Apple Silicon and macOS 14 or later. This build is not signed with a Developer ID: drag it to Applications, then right-click → Open. No YOLO models are included; it runs on Apple Vision until you add your own (see the README)."

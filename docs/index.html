@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Human Detector for Mac</title>
+<meta name="description" content="Sort a photo library by whether people are in it. Runs on your Mac and your photos never leave it. Nothing is deleted and every run can be undone.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="favicon.png">
+<meta property="og:title" content="Human Detector for Mac">
+<meta property="og:description" content="Sort a photo library by whether people are in it. Private, undoable, free for noncommercial use.">
+<meta property="og:image" content="icon.png">
+<style>
+  :root {
+    --bg: #f7f7fb;
+    --surface: #ffffff;
+    --text: #15151f;
+    --muted: #5a5a6e;
+    --line: #e3e3ee;
+    --blue: #2962ff;
+    --violet: #7b3fe4;
+    --code-bg: #efeff6;
+    --ok: #12805c;
+    --maybe: #a15c00;
+    --out: #b3261e;
+    --shadow: 0 1px 2px rgba(20, 20, 50, .06), 0 8px 24px rgba(20, 20, 50, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0f17;
+      --surface: #181824;
+      --text: #f0f0f8;
+      --muted: #a4a4bb;
+      --line: #2a2a3c;
+      --code-bg: #1f1f2e;
+      --ok: #4cd6a0;
+      --maybe: #ffb454;
+      --out: #ff8a80;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f0f17; --surface: #181824; --text: #f0f0f8; --muted: #a4a4bb; --line: #2a2a3c;
+    --code-bg: #1f1f2e; --ok: #4cd6a0; --maybe: #ffb454; --out: #ff8a80; --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 16px; }
+  a { color: var(--blue); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) a { color: #8fb0ff; } }
+  :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+
+  header.hero { text-align: center; padding: 72px 0 48px; }
+  .hero img { width: 136px; height: 136px; filter: drop-shadow(0 12px 24px rgba(41, 98, 255, .35)); }
+  h1 { font-size: clamp(2.1rem, 6vw, 3.2rem); line-height: 1.1; margin: 20px 0 12px; letter-spacing: -.02em; }
+  .lede { font-size: clamp(1.05rem, 2.6vw, 1.25rem); color: var(--muted); max-width: 34em; margin: 0 auto 28px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 14px 26px; border-radius: 12px; font-weight: 600; text-decoration: none;
+    border: 1px solid var(--line); background: var(--surface); color: var(--text) !important;
+  }
+  .btn.primary { background: linear-gradient(135deg, var(--blue), var(--violet)); color: #fff !important; border: 0; box-shadow: 0 8px 24px rgba(79, 70, 229, .35); }
+  .btn:hover { filter: brightness(1.06); }
+  .fine { color: var(--muted); font-size: .92rem; margin-top: 16px; }
+
+  section { padding: 40px 0; }
+  h2 { font-size: 1.6rem; line-height: 1.2; margin: 0 0 8px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; max-width: 40em; }
+
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .grid.two { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+  .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .97rem; }
+  .folder { font: 600 .95rem ui-monospace, SFMono-Regular, Menlo, monospace; display: inline-block; padding: 2px 10px; border-radius: 8px; margin-bottom: 10px; background: var(--code-bg); }
+  .folder.clean { color: var(--ok); } .folder.review { color: var(--maybe); } .folder.trash { color: var(--out); }
+
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: .95rem; }
+  th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  .scroll { overflow-x: auto; }
+
+  ol.steps { padding-left: 1.2em; }
+  ol.steps li { margin: 10px 0; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+  code { background: var(--code-bg); padding: 2px 6px; border-radius: 6px; }
+  pre { background: var(--code-bg); padding: 14px 16px; border-radius: 12px; overflow-x: auto; margin: 12px 0; }
+  pre code { background: none; padding: 0; }
+
+  .note { border-left: 4px solid var(--maybe); background: var(--surface); padding: 14px 18px; border-radius: 0 12px 12px 0; margin-top: 20px; }
+  .note strong { color: var(--maybe); }
+
+  footer { border-top: 1px solid var(--line); margin-top: 24px; padding: 28px 0 56px; color: var(--muted); font-size: .92rem; text-align: center; }
+  footer a { margin: 0 8px; }
+
+  @media (max-width: 480px) { header.hero { padding-top: 48px; } body { font-size: 16px; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <img src="icon.png" alt="Human Detector app icon: a person inside a camera viewfinder" width="136" height="136">
+    <h1>Human Detector</h1>
+    <p class="lede">Sort a photo library by whether people are in it. Detection runs entirely on your Mac. Nothing is deleted, and every run can be undone.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/yalin-alagul/human-detector-app/releases/latest/download/HumanDetector.dmg">Download for Mac</a>
+      <a class="btn" href="https://github.com/yalin-alagul/human-detector-app">View source</a>
+    </div>
+    <p class="fine">Free for noncommercial use &middot; macOS 14 or later &middot; Apple Silicon only</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section aria-labelledby="how">
+    <h2 id="how">Three folders, one decision per photo</h2>
+    <p class="sub">Point it at a folder of photos. Every image is moved into one of three folders, keeping its sub-folder structure.</p>
+    <div class="grid">
+      <div class="card"><span class="folder clean">clean/</span><h3>Confident</h3><p>The detectors agree with high confidence.</p></div>
+      <div class="card"><span class="folder review">review/</span><h3>Unsure</h3><p>Borderline scores. A quick look is all it needs, and you can reclassify with a click.</p></div>
+      <div class="card"><span class="folder trash">trash/</span><h3>The other verdict</h3><p>Still just a move. You delete it yourself, at the end, after spot-checking.</p></div>
+    </div>
+    <p class="sub" style="margin-top:24px">A <strong>Goal</strong> switch decides what the folders mean. Detection is identical either way.</p>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Goal</th><th>clean/</th><th>review/</th><th>trash/</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Keep people</strong> (default)</td><td>has a person</td><td>unsure</td><td>nobody in it</td></tr>
+          <tr><td><strong>Remove people</strong></td><td>nobody in it</td><td>unsure</td><td>has a person</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="safe">
+    <h2 id="safe">Built so a wrong guess is cheap</h2>
+    <div class="grid two">
+      <div class="card"><h3>Nothing is deleted</h3><p>Files are moved, never removed. By default, a name collision gets a suffix instead of an overwrite.</p></div>
+      <div class="card"><h3>Undo any run</h3><p>Every move is journalled. <em>Undo Last Run</em> puts the files back where they were.</p></div>
+      <div class="card"><h3>Private by design</h3><p>No account and no upload. Your photos never leave the machine. The app goes online only if you choose to download optional models.</p></div>
+      <div class="card"><h3>Tune it on your photos</h3><p>Calibrate on a random sample and drag thresholds with instant feedback, before you run the whole library.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="limits">
+    <h2 id="limits">Honest about accuracy</h2>
+    <p class="sub">No detector is perfect, and this one says so instead of hiding it.</p>
+    <div class="note">
+      <p style="margin:0 0 10px"><strong>The download runs on Apple Vision only.</strong> It detects faces, human outlines and body pose, and it catches fewer people than a dedicated YOLO model, especially small or partly hidden figures.</p>
+      <p style="margin:0">For best results, add a YOLO model yourself: export one and download it into the app from your own Hugging Face repo, or import it from a folder (the README explains how). Whichever you use, calibrate first and spot-check a random batch of <code>clean/</code> before deleting anything. If a missed photo would be a real problem, check <code>review/</code> by hand.</p>
+    </div>
+  </section>
+
+  <section id="install" aria-labelledby="install-h">
+    <h2 id="install-h">Install</h2>
+    <p class="sub">The app is not yet signed with an Apple Developer ID, so macOS asks you to confirm it once.</p>
+    <ol class="steps">
+      <li>Download <code>HumanDetector.dmg</code> and open it.</li>
+      <li>Drag <strong>Human Detector</strong> into <strong>Applications</strong>.</li>
+      <li>Open <strong>Applications</strong>, <strong>right-click</strong> the app, choose <strong>Open</strong>, then <strong>Open</strong> again. You only need to do this the first time.</li>
+    </ol>
+    <p>If macOS says the app is damaged, clear the download flag in Terminal, then open it again:</p>
+<pre><code>xattr -dr com.apple.quarantine "/Applications/Human Detector.app"</code></pre>
+    <p class="fine">Prefer to build it yourself? Clone the repo and run <code>make install</code>.</p>
+  </section>
+
+  <section aria-labelledby="license">
+    <h2 id="license">Free, for noncommercial use</h2>
+    <p>Human Detector is released under the <a href="https://github.com/yalin-alagul/human-detector-app/blob/main/LICENSE">PolyForm Noncommercial License 1.0.0</a>. Personal, hobby, research and educational use are all fine. Commercial use is not permitted. The source is available, but this is not an OSI-approved open-source license.</p>
+    <p>Optional YOLO and face models are third-party and have their own licenses. They are not included in the download.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a href="https://github.com/yalin-alagul/human-detector-app">Source</a>
+    <a href="https://github.com/yalin-alagul/human-detector-app/releases">All releases</a>
+    <a href="https://github.com/yalin-alagul/human-detector-app/issues">Report a problem</a>
+    <p>Copyright 2026 Yalin Alagul. This page loads no scripts, fonts or trackers.</p>
+  </div>
+</footer>
+</body>
+</html>

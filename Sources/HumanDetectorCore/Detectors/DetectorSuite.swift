@@ -19,9 +19,21 @@ public final class DetectorSuite: @unchecked Sendable {
         var notes: [String] = []
 
         if config.person.enabled {
-            let detector = try PersonDetector(config: config.person)
-            self.person = detector
-            personDescription = detector.modelDescription
+            do {
+                let detector = try PersonDetector(config: config.person)
+                self.person = detector
+                personDescription = detector.modelDescription
+            } catch DetectorError.modelNotFound(let stem) {
+                // The app ships without models. Run on Apple Vision alone rather than
+                // refusing to scan, and say so, because recall is lower without YOLO.
+                self.person = nil
+                personDescription = "not installed (Apple Vision only)"
+                notes.append(
+                    "Person model '\(stem)' is not installed, so only Apple Vision ran "
+                    + "(faces, human rectangles, body pose). This catches fewer people than "
+                    + "YOLO. See the README to add a model."
+                )
+            }
         } else {
             self.person = nil
             personDescription = "disabled"

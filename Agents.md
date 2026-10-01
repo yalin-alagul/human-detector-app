@@ -159,21 +159,38 @@ corrections. See `README.md` for the full guide.
 
 - **Runtime is SwiftUI + CoreML + Vision.** No Python, no PyTorch, no ONNX
   Runtime at runtime. Python is used once, by `Models/export_models.py`, to
-  produce `.mlpackage` files.
+  produce `.mlpackage` files, and by `Models/upload_to_hf.py` to put them on
+  Hugging Face.
+- **Models are not bundled.** The app ships without models (about 3 MB) and
+  downloads them from a Hugging Face repo (`<username>/human-detector-models`,
+  private by default; username, repository and token in Settings, the token in
+  the Keychain) into `Application Support/HumanDetector/Models`. The Dashboard
+  and the Models page download, remove, re-download and import them. Every
+  model is optional.
+- **One installed app.** `make install` / `make run` build Release into
+  `/Applications` and delete the build product; build folders are `*.noindex`
+  and unregistered from LaunchServices so no second copy shows up.
+  `/System/Applications` is read-only (sealed system volume). The app is
+  arm64-only.
 - **HEIC is handled by ImageIO**, not `pillow-heif`.
 - **Faces** default to Vision's built-in detector; SCRFD is available as an
   optional CoreML export.
 - **Hardware is detected, not assumed.** There is no "M6"; presets key on RAM
-  and cores (`lite` 8 GB, `balanced` 16 GB, `max` 24 GB+). This dev machine
-  auto-selects `balanced` (`yolo26m-seg` @ 960 px); a 24 GB machine selects
-  `max` (`yolo26x-seg` @ 1280 px).
+  and cores (`lite` 8 GB, `balanced` 16 GB, `max` 24 GB+). The 16 GB M1 dev
+  MacBook Pro auto-selects `balanced` (`yolo26m-seg` @ 960 px); the M6 Mac mini
+  (24 GB) selects `max` (`yolo26x-seg` @ 1280 px) and is verified on it. Core
+  counts read every perflevel, so the M6's three tiers show as `2S+4P+6E`.
+- **Builds need full Xcode.** The Makefile and pre-push hook set
+  `DEVELOPER_DIR` to `/Applications/Xcode.app` when `xcode-select` points at
+  the Command Line Tools (no XCTest, no `xcodebuild`).
 - **Masks are optional.** Presence needs only boxes; `computeMasks` defaults
   off and is enabled for the review UI.
 - **Undo exists.** Every move is journalled; `Undo Last Run` restores it.
 - **Calibration is a first-class screen.** Raw scores are cached so thresholds
   can be re-tuned with zero extra inference.
 - **The CLI is a separate non-sandboxed binary**; the shipped app is sandboxed
-  and notarizable, with no network entitlement.
+  and notarizable. Its only network entitlement is `network.client`, used to
+  download models.
 
 ### Goal switch
 
